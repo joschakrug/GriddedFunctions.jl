@@ -48,6 +48,12 @@ gfi(2.031, 11.007, 1)
 gfi(2.031, 11.007, 2)
 ```
 
-## Installing this package
+## Working with this package
+
+### Installation
 
 So far, only a development version of this package is available. I recommend cloning this git repository to a local folder (say, `~/Packages/GriddedFunctions`) and add that folder to your main project as a development dependency running `] dev ~/Packages/GriddedFunctions` in the Julia REPL of your main project.
+
+### Testing
+
+Testing is as simple as running `] test GriddedFunctions` with the `test` environment activated.
