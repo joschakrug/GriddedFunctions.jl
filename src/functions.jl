@@ -78,7 +78,58 @@ function Base.:/(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, T
     GriddedFunction(grid(gfa), values(gfa) ./ values(gfb))
 end
 
-# todo: add addition/subtraction etc. with respect to scalars
+function Base.:+(gf::GriddedFunction, c::Real)
+    GriddedFunction(grid(gf), values(gf) .+ c)
+end
+
+function Base.:-(gf::GriddedFunction, c::Real)
+    GriddedFunction(grid(gf), values(gf) .- c)
+end
+
+function Base.:*(gf::GriddedFunction, c::Real)
+    GriddedFunction(grid(gf), values(gf) .* c)
+end
+
+function Base.:/(gf::GriddedFunction, c::Real)
+    GriddedFunction(grid(gf), values(gf) ./ c)
+end
+
+Base.:+(c::Real, gf::GriddedFunction) = gf + c
+Base.:-(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c .- values(gf))
+Base.:*(c::Real, gf::GriddedFunction) = gf * c
+Base.:/(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c ./ values(gf))
+
+"""
+    map(f, gf::GriddedFunction)
+
+Apply scalar function `f` elementwise to every value of `gf` and return a new
+`GriddedFunction` on the same grid.
+
+# Examples
+
+```{julia}
+map(log,          gf)
+map(exp,          gf)
+map(x -> x^2,    gf)
+map(x -> 1/(1+x), gf)
+```
+"""
+Base.map(f, gf::GriddedFunction) = GriddedFunction(grid(gf), map(f, values(gf)))
+
+"""
+    map!(f, gf::GriddedFunction)
+
+Apply scalar function `f` elementwise to every value of `gf` in place, mutating
+`gf` and returning it.
+"""
+function Base.map!(f, gf::GriddedFunction)
+    map!(f, values(gf))
+    gf
+end
+
+Base.log(gf::GriddedFunction) = map(log, gf)
+Base.exp(gf::GriddedFunction) = map(exp, gf)
+Base.:^(gf::GriddedFunction, x::Real) = map(v -> v^x, gf)
 
 """
     continuousview(gf, discretex)
