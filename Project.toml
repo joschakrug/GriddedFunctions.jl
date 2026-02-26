@@ -1,0 +1,10 @@
+name = "GriddedFunctions"
+uuid = "15489a28-470a-4c47-be98-4174d0f03947"
+version = "0.1.0"
+authors = ["Joscha Krug <joscha.krug@proton.me>"]
+
+[deps]
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+
+[compat]
+Interpolations = "0.16.2"

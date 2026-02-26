@@ -1,0 +1,53 @@
+# Approximate functions over a grid
+
+This package provides tools to comfortably work with functions that cannot be defined analytically but only approximated over a grid. It builds on the [Interpolations.jl](https://juliamath.github.io/Interpolations.jl/latest/) package for actually computing function values but offers tools to define, store, modify and access approximated functions in a convenient and efficient way.
+
+This is useful in particular when trying to solve dynamic problems via value function iteration.
+
+## A simple example
+
+Imagine you want to approximate a function of three variables, two of which live in a continuous range and one of which can only take a discrete set of values. Using the `GriddedFunctions.jl` package, you can easily set up such a function as follows:
+
+```{julia}
+using GriddedFunctions
+
+grid = Grid(
+    LinearAxis(range(0, 10, length = 500)),
+    LinearAxis(range(5, 20, length = 500)),
+    DiscreteAxis([0, 1])
+)
+
+gf = GriddedFunction(
+    grid,
+    (x, y, z) -> (x * y) * exp(z),
+    Float64
+)
+```
+
+If you want to perform a simple grid search optimisation of `gf`, this is as easy as using Julia's built-in `findmax` function:
+
+```{julia}
+maxval, maxidx = findmax(gf)
+
+# return the actual (x, y, z) values that maximise gf on the given grid
+grid[maxidx]
+```
+
+If you want to get an interpolated continuous version of `gfi`, the package provides an implementation of the `Interpolations.interpolate` method tailored to gridded functions. It will interpolate between values on continuous axes but only accept exact values on discrete axes:
+
+```{julia}
+using Interpolations
+
+gfi = interpolate(gf)
+
+# valid
+gfi(2.031, 11.007, 0)
+gfi(2.031, 11.007, 1)
+
+# throws an error
+gfi(2.031, 11.007, 2)
+```
+
+## Installing this package
+
+So far, only a development version of this package is available. I recommend cloning this git repository to a local folder (say, `~/Packages/GriddedFunctions`) and add that folder to your main project as a development dependency running `] dev ~/Packages/GriddedFunctions` in the Julia REPL of your main project.

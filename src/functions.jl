@@ -1,0 +1,172 @@
+
+# longer run to do: add a Domain (potentially linked to a GridSection type)
+# to allow for functions that are not defined over the entire grid
+
+"""
+    GriddedFunction{TX, TY, D, G} <: AbstractArray{TY, D}
+
+A function of type `TY` defined over a `D`-dimensional grid of type `G`.
+
+Values are stored as an `Array{TY}` with one entry per grid point. `TX` is the
+type of a grid point (a `Tuple` of axis element types).
+
+# Constructors
+
+    GriddedFunction(g::Grid, values::Array)
+
+Construct from a pre-computed array of values. `size(values)` must match
+`size(g)`.
+
+    GriddedFunction(g::Grid, f::Function, T::Type)
+
+Construct by evaluating `f` at every grid point. The return type of `f` must
+be `T`.
+"""
+mutable struct GriddedFunction{TX, TY <: Real, D, G <: Grid{TX, D}} <: AbstractArray{TY, D}
+    grid::G
+    values::Array{TY}
+
+    function GriddedFunction(g::Grid, values)
+        @assert size(g) == size(values)
+        D = length(size(g))
+        new{eltype(g), eltype(values), D, typeof(g)}(g, values)
+    end
+end
+
+function GriddedFunction(g::Grid, f::Function, T::Type)
+    val = Array{T}(undef, size(g))
+    for I in eachindex(val)
+        val[I] = f(g[I]...)
+    end
+    GriddedFunction(g, val)
+end
+
+"Return the grid over which `gf` is defined."
+grid(gf::GriddedFunction) = gf.grid
+
+"Return the array of function values of `gf` at each grid point."
+values(gf::GriddedFunction) = gf.values
+
+Base.eltype(::Type{GriddedFunction{TX, TY}}) where {TX, TY} = TY
+Base.size(gf::GriddedFunction) = size(grid(gf))
+
+function Base.getindex(gf::GriddedFunction{TX, TY, D}, I::Vararg{Int, D}) where {TX, TY, D}
+    values(gf)[I...]
+end
+
+function Base.setindex(gf::GriddedFunction{TX, TY, D}, v::TY, I::Vararg{Int, D}) where {TX, TY, D}
+    gf.values[I...] = v
+end
+
+function Base.:+(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
+    @assert grid(gfa) === grid(gfb)
+    GriddedFunction(grid(gfa), values(gfa) + values(gfb))
+end
+
+function Base.:-(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
+    @assert grid(gfa) === grid(gfb)
+    GriddedFunction(grid(gfa), values(gfa) - values(gfb))
+end
+
+function Base.:*(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
+    @assert grid(gfa) === grid(gfb)
+    GriddedFunction(grid(gfa), values(gfa) .* values(gfb))
+end
+
+function Base.:/(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
+    @assert grid(gfa) === grid(gfb)
+    GriddedFunction(grid(gfa), values(gfa) ./ values(gfb))
+end
+
+# todo: add addition/subtraction etc. with respect to scalars
+
+"""
+    continuousview(gf, discretex)
+
+Return a view of `gf`'s value array with all continuous dimensions open and
+the discrete dimensions fixed at the grid indices given by `discretex`.
+"""
+function continuousview(
+        gf::GriddedFunction{TX, TY, D, MixedGrid{TX, D, DC, DD, CG, DG}},
+        discretex::CartesianIndex{DD}
+    ) where {TX, TY, D, DC, DD, CG, DG}
+    # view of the values array with continuous dimensions open, discrete dimensions fixed
+    view(values(gf), ntuple(_ -> :, Val(DC))..., Tuple(discretex)...)
+end
+
+"""
+    GriddedFunctionInterpolation{TX, TY, D, DD, G, SITP}
+
+A pre-computed interpolation of a [`GriddedFunction`](@ref) over a grid of
+type `G`.
+
+For each combination of discrete axis values, a scaled interpolation object of
+type `SITP` is built over the continuous subgrid once at construction time.
+Subsequent calls to [`evaluate`](@ref) look up the appropriate interpolation
+and evaluate it at the continuous components of the query point, avoiding
+repeated allocation.
+
+`DD` is the number of discrete axes (0 for a purely continuous grid, in which
+case `interpolations` is a 0-dimensional array holding the single interpolation
+object).
+
+# Constructors
+
+    GriddedFunctionInterpolation(gf, interpmode)
+
+Construct from any [`GriddedFunction`](@ref) defined over a `ContinuousGrid`
+or a `MixedGrid`. `interpmode` is passed directly to
+`Interpolations.interpolate`.
+"""
+struct GriddedFunctionInterpolation{TX, TY, D, DD, G <: Grid{TX, D}, SITP}
+    gf::GriddedFunction{TX, TY, D, G}
+    interpolations::Array{SITP, DD}
+end
+
+function GriddedFunctionInterpolation(
+        gf::GriddedFunction{TX, TY, D, MixedGrid{TX, D, DC, DD, CG, DG}},
+        interpmode::Interpolations.InterpolationType
+    ) where {TX, TY, D, DC, DD, CG, DG}
+    g = grid(gf)
+
+    itps = map(CartesianIndices(discretegrid(g))) do discretex
+        cont_view = continuousview(gf, discretex)
+        scale(interpolate(cont_view, interpmode), map(range, continuousaxes(g))...)
+    end
+
+    GriddedFunctionInterpolation(gf, itps)
+end
+
+function GriddedFunctionInterpolation(
+        gf::GriddedFunction{TX, TY, D, ContinuousGrid{TX, D, A}},
+        interpmode::Interpolations.InterpolationType
+    ) where {TX, TY, D, A}
+    g = grid(gf)
+    sitp = scale(interpolate(values(gf), interpmode), map(range, axes(g))...)
+    GriddedFunctionInterpolation(gf, fill(sitp))
+end
+
+function Interpolations.interpolate(
+        gf::GriddedFunction, interpmode::IT = BSpline(Linear())
+    ) where {IT <: Union{Interpolations.NoInterp, Interpolations.BSpline}}
+    GriddedFunctionInterpolation(gf, interpmode)
+end
+
+"""
+    evaluate(gitp::GriddedFunctionInterpolation, x)
+
+Evaluate the interpolated function at point `x`.
+
+Looks up the pre-computed interpolation for the discrete components of `x`,
+then evaluates it at the continuous components. `x` must be a tuple of type
+`TX` with the continuous components first, followed by the discrete components.
+"""
+function evaluate(gitp::GriddedFunctionInterpolation{TX, TY, D, DD}, x::TX) where {TX, TY, D, DD}
+    disc_idx = searchdiscrete(grid(gitp.gf), x)
+    x_cont = ntuple(i -> x[i], Val(D - DD))
+    gitp.interpolations[disc_idx...](x_cont...)
+end
+
+
+# make interpolated function callable
+(gitp::GriddedFunctionInterpolation)(x::Vararg) = evaluate(gitp, x)
