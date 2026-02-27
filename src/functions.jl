@@ -41,6 +41,11 @@ function GriddedFunction(g::Grid, f::Function, T::Type)
     GriddedFunction(g, val)
 end
 
+function GriddedFunction(g::Grid, u::UndefInitializer, T::Type)
+    val = Array{T}(u, size(g))
+    GriddedFunction(g, val)
+end
+
 "Return the grid over which `gf` is defined."
 grid(gf::GriddedFunction) = gf.grid
 
