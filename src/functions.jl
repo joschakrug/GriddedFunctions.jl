@@ -46,14 +46,18 @@ function GriddedFunction(g::Grid, u::UndefInitializer, T::Type)
     GriddedFunction(g, val)
 end
 
-"Return the grid over which `gf` is defined."
-grid(gf::GriddedFunction) = gf.grid
+"""
+    Grid(gf::GriddedFunction)
+
+Return the grid over which `gf` is defined.
+"""
+Grid(gf::GriddedFunction) = gf.grid
 
 "Return the array of function values of `gf` at each grid point."
 values(gf::GriddedFunction) = gf.values
 
 Base.eltype(::Type{GriddedFunction{TX, TY}}) where {TX, TY} = TY
-Base.size(gf::GriddedFunction) = size(grid(gf))
+Base.size(gf::GriddedFunction) = size(Grid(gf))
 
 function Base.getindex(gf::GriddedFunction{TX, TY, D}, I::Vararg{Int, D}) where {TX, TY, D}
     values(gf)[I...]
@@ -64,45 +68,45 @@ function Base.setindex(gf::GriddedFunction{TX, TY, D}, v::TY, I::Vararg{Int, D})
 end
 
 function Base.:+(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) + values(gfb))
+    @assert Grid(gfa) === Grid(gfb)
+    GriddedFunction(Grid(gfa), values(gfa) + values(gfb))
 end
 
 function Base.:-(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) - values(gfb))
+    @assert Grid(gfa) === Grid(gfb)
+    GriddedFunction(Grid(gfa), values(gfa) - values(gfb))
 end
 
 function Base.:*(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) .* values(gfb))
+    @assert Grid(gfa) === Grid(gfb)
+    GriddedFunction(Grid(gfa), values(gfa) .* values(gfb))
 end
 
 function Base.:/(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) ./ values(gfb))
+    @assert Grid(gfa) === Grid(gfb)
+    GriddedFunction(Grid(gfa), values(gfa) ./ values(gfb))
 end
 
 function Base.:+(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) .+ c)
+    GriddedFunction(Grid(gf), values(gf) .+ c)
 end
 
 function Base.:-(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) .- c)
+    GriddedFunction(Grid(gf), values(gf) .- c)
 end
 
 function Base.:*(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) .* c)
+    GriddedFunction(Grid(gf), values(gf) .* c)
 end
 
 function Base.:/(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) ./ c)
+    GriddedFunction(Grid(gf), values(gf) ./ c)
 end
 
 Base.:+(c::Real, gf::GriddedFunction) = gf + c
-Base.:-(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c .- values(gf))
+Base.:-(c::Real, gf::GriddedFunction) = GriddedFunction(Grid(gf), c .- values(gf))
 Base.:*(c::Real, gf::GriddedFunction) = gf * c
-Base.:/(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c ./ values(gf))
+Base.:/(c::Real, gf::GriddedFunction) = GriddedFunction(Grid(gf), c ./ values(gf))
 
 """
     map(f, gf::GriddedFunction)
@@ -119,7 +123,7 @@ map(x -> x^2,    gf)
 map(x -> 1/(1+x), gf)
 ```
 """
-Base.map(f, gf::GriddedFunction) = GriddedFunction(grid(gf), map(f, values(gf)))
+Base.map(f, gf::GriddedFunction) = GriddedFunction(Grid(gf), map(f, values(gf)))
 
 """
     map!(f, gf::GriddedFunction)
@@ -183,7 +187,7 @@ function GriddedFunctionInterpolation(
         gf::GriddedFunction{TX, TY, D, MixedGrid{TX, D, DC, DD, CG, DG}},
         interpmode::Interpolations.InterpolationType
     ) where {TX, TY, D, DC, DD, CG, DG}
-    g = grid(gf)
+    g = Grid(gf)
 
     itps = map(CartesianIndices(discretegrid(g))) do discretex
         cont_view = continuousview(gf, discretex)
@@ -197,7 +201,7 @@ function GriddedFunctionInterpolation(
         gf::GriddedFunction{TX, TY, D, ContinuousGrid{TX, D, A}},
         interpmode::Interpolations.InterpolationType
     ) where {TX, TY, D, A}
-    g = grid(gf)
+    g = Grid(gf)
     sitp = scale(interpolate(values(gf), interpmode), map(range, axes(g))...)
     GriddedFunctionInterpolation(gf, fill(sitp))
 end
@@ -218,7 +222,7 @@ then evaluates it at the continuous components. `x` must be a tuple of type
 `TX` with the continuous components first, followed by the discrete components.
 """
 function evaluate(gitp::GriddedFunctionInterpolation{TX, TY, D, DD}, x::TX) where {TX, TY, D, DD}
-    disc_idx = searchdiscrete(grid(gitp.gf), x)
+    disc_idx = searchdiscrete(Grid(gitp.gf), x)
     x_cont = ntuple(i -> x[i], Val(D - DD))
     gitp.interpolations[disc_idx...](x_cont...)
 end

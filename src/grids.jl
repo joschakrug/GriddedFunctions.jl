@@ -90,10 +90,10 @@ struct DiscreteAxis{T} <: Axis{T}
     points::Vector{T}
 
     function DiscreteAxis(points::Vector{T}) where T
-        if issorted(points)
+        if all(points[i] < points[i + 1] for i in 1:(length(points) - 1))
             new{T}(points)
         else
-            error("Points on axis need to be stored in ascending order.")
+            error("Points on axis need to be unique and stored in ascending order.")
         end
     end
 end
