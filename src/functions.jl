@@ -63,7 +63,7 @@ function Base.getindex(gf::GriddedFunction{TX, TY, D}, I::Vararg{Int, D}) where 
     values(gf)[I...]
 end
 
-function Base.setindex(gf::GriddedFunction{TX, TY, D}, v::TY, I::Vararg{Int, D}) where {TX, TY, D}
+function Base.setindex!(gf::GriddedFunction{TX, TY, D}, v::TY, I::Vararg{Int, D}) where {TX, TY, D}
     gf.values[I...] = v
 end
 
