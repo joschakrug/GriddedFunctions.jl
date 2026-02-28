@@ -33,7 +33,7 @@ mutable struct GriddedFunction{TX, TY <: Real, D, G <: Grid{TX, D}} <: AbstractA
     end
 end
 
-function GriddedFunction(g::Grid, f::Function, T::Type)
+function GriddedFunction(T::Type, g::Grid, f::Function)
     val = Array{T}(undef, size(g))
     for I in eachindex(val)
         val[I] = f(g[I]...)
@@ -41,7 +41,7 @@ function GriddedFunction(g::Grid, f::Function, T::Type)
     GriddedFunction(g, val)
 end
 
-function GriddedFunction(g::Grid, u::UndefInitializer, T::Type)
+function GriddedFunction(T::Type, g::Grid, u::UndefInitializer)
     val = Array{T}(u, size(g))
     GriddedFunction(g, val)
 end
@@ -66,6 +66,42 @@ end
 function Base.setindex!(gf::GriddedFunction{TX, TY, D}, v::TY, I::Vararg{Int, D}) where {TX, TY, D}
     gf.values[I...] = v
 end
+
+"""
+    pairs(gf::GriddedFunction)
+
+Return an iterator over `(grid_point => function_value)` pairs of `gf`.
+
+Each element is a `Pair` whose key is a grid point (a scalar for 1-D grids,
+a `Tuple` of axis values for higher-dimensional grids) and whose value is the
+corresponding function value stored in `gf`.
+
+# Examples
+
+```{julia}
+g  = Grid(LinearAxis(range(0.0, 1.0; length=5)))
+gf = GriddedFunction(g, x -> x^2, Float64)
+
+for (x, fx) in pairs(gf)
+    println("f(\$x) = \$fx")
+end
+# f(0.0) = 0.0
+# f(0.25) = 0.0625
+# ...
+```
+
+For multi-dimensional grids the grid point is a `Tuple`:
+
+```{julia}
+g2  = Grid(LinearAxis(range(0.0, 1.0; length=3)), LinearAxis(range(0.0, 1.0; length=3)))
+gf2 = GriddedFunction(g2, (x, y) -> x + y, Float64)
+
+for ((x, y), fxy) in pairs(gf2)
+    println("f(\$x, \$y) = \$fxy")
+end
+```
+"""
+Base.pairs(gf::GriddedFunction) = (g => v for (g, v) in zip(Grid(gf), values(gf)))
 
 function Base.:+(gfa::GriddedFunction{TX, TYA, D, G}, gfb::GriddedFunction{TX, TYB, D, G}) where {TX, TYA, TYB, D, G}
     @assert Grid(gfa) === Grid(gfb)

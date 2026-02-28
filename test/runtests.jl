@@ -71,7 +71,7 @@ using Interpolations
             DiscreteAxis([0, 1])
         )
 
-        gf = GriddedFunction(grid, (x, y, z) -> (x * y) * exp(z), Float64)
+        gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
 
         @test gf isa GriddedFunction
         @test size(gf) == (500, 500, 2)
@@ -89,8 +89,8 @@ using Interpolations
             LinearAxis(range(5.0, 20.0, length = 50)),
             DiscreteAxis([0, 1])
         )
-        gf1 = GriddedFunction(grid, (x, y, z) -> x * y * exp(z), Float64)
-        gf2 = GriddedFunction(grid, (x, y, z) -> x + y + z,       Float64)
+        gf1 = GriddedFunction(Float64, grid, (x, y, z) -> x * y * exp(z))
+        gf2 = GriddedFunction(Float64, grid, (x, y, z) -> x + y + z)
 
         gfsum  = gf1 + gf2
         gfdiff = gf1 - gf2
@@ -103,7 +103,42 @@ using Interpolations
         @test gfdiv[2, 3, 1]  ≈ gf1[2, 3, 1] / gf2[2, 3, 1]
     end
 
-    @testset "GriddedFunction — findmax and grid indexing" begin
+    @testset "GriddedFunction — pairs" begin
+        # 1-D: keys are scalars (matching 1-D grid iteration), values are function values
+        g1  = Grid(LinearAxis(range(0.0, 1.0; length=5)))
+        gf1 = GriddedFunction(Float64, g1, x -> x^2)
+
+        ps1 = collect(pairs(gf1))
+        @test length(ps1) == 5
+        @test all(p isa Pair for p in ps1)
+
+        # keys and values match the grid and function in iteration order
+        for (p, x, fx) in zip(ps1, g1, values(gf1))
+            @test p.first  == x
+            @test p.second ≈ fx
+        end
+        # values satisfy the defining relation
+        @test all(p.second ≈ p.first^2 for p in ps1)
+
+        # 2-D: keys are Tuples, values are function values
+        g2  = Grid(LinearAxis(range(0.0, 1.0; length=3)),
+                   LinearAxis(range(0.0, 2.0; length=4)))
+        gf2 = GriddedFunction(Float64, g2, (x, y) -> x + y)
+
+        ps2 = collect(pairs(gf2))
+        @test length(ps2) == 3 * 4
+        @test all(p isa Pair for p in ps2)
+
+        # keys and values match the grid and function in iteration order
+        for (p, x, fx) in zip(ps2, g2, values(gf2))
+            @test p.first  == x
+            @test p.second ≈ fx
+        end
+        # values satisfy the defining relation
+        @test all(p.second ≈ p.first[1] + p.first[2] for p in ps2)
+    end
+
+    @testset "GriddedFunction — findmax" begin
         grid = Grid(
             LinearAxis(range(0.0, 10.0, length = 500)),
             LinearAxis(range(5.0, 20.0, length = 500)),
@@ -111,13 +146,13 @@ using Interpolations
         )
 
         # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
-        gf = GriddedFunction(grid, (x, y, z) -> (x * y) * exp(z), Float64)
+        gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
 
-        maxval, maxidx = findmax(gf)
+        maxval, maxpt = findmax(gf)
 
         @test maxval ≈ 10.0 * 20.0 * exp(1)
-        # grid[maxidx] should return the coordinate tuple at the maximum
-        @test grid[maxidx] == (10.0, 20.0, 1)
+        # findmax now returns the grid point directly (via pairs)
+        @test maxpt == (10.0, 20.0, 1)
     end
 
     @testset "Interpolation" begin
@@ -127,7 +162,7 @@ using Interpolations
             DiscreteAxis([0, 1])
         )
 
-        gf  = GriddedFunction(grid, (x, y, z) -> (x * y) * exp(z), Float64)
+        gf  = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
         gfi = interpolate(gf)
 
         @test gfi isa GriddedFunctions.GriddedFunctionInterpolation
@@ -155,7 +190,7 @@ using Interpolations
             LinearAxis(range(0.0, 10.0, length = 200))
         )
 
-        gf  = GriddedFunction(grid, (x, y) -> x * y, Float64)
+        gf  = GriddedFunction(Float64, grid, (x, y) -> x * y)
         gfi = interpolate(gf)
 
         @test gfi isa GriddedFunctions.GriddedFunctionInterpolation
