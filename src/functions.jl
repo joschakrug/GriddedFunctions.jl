@@ -191,7 +191,7 @@ function continuousview(
 end
 
 """
-    GriddedFunctionInterpolation{TX, TY, D, DD, G, SITP}
+    GFInterpolation{TX, TY, D, DD, G, SITP}
 
 A pre-computed interpolation of a [`GriddedFunction`](@ref) over a grid of
 type `G`.
@@ -208,18 +208,18 @@ object).
 
 # Constructors
 
-    GriddedFunctionInterpolation(gf, interpmode)
+    GFInterpolation(gf, interpmode)
 
 Construct from any [`GriddedFunction`](@ref) defined over a `ContinuousGrid`
 or a `MixedGrid`. `interpmode` is passed directly to
 `Interpolations.interpolate`.
 """
-struct GriddedFunctionInterpolation{TX, TY, D, DD, G <: Grid{TX, D}, SITP}
+struct GFInterpolation{TX, TY, D, DD, G <: Grid{TX, D}, SITP}
     gf::GriddedFunction{TX, TY, D, G}
     interpolations::Array{SITP, DD}
 end
 
-function GriddedFunctionInterpolation(
+function GFInterpolation(
         gf::GriddedFunction{TX, TY, D, MixedGrid{TX, D, DC, DD, CG, DG}},
         interpmode::Interpolations.InterpolationType
     ) where {TX, TY, D, DC, DD, CG, DG}
@@ -227,54 +227,54 @@ function GriddedFunctionInterpolation(
 
     itps = map(CartesianIndices(discretegrid(g))) do discretex
         cont_view = continuousview(gf, discretex)
-        scale(interpolate(cont_view, interpmode), map(range, continuousaxes(g))...)
+        Interpolations.scale(Interpolations.interpolate(cont_view, interpmode), map(range, continuousaxes(g))...)
     end
 
-    GriddedFunctionInterpolation(gf, itps)
+    GFInterpolation(gf, itps)
 end
 
-function GriddedFunctionInterpolation(
+function GFInterpolation(
         gf::GriddedFunction{TX, TY, D, ContinuousGrid{TX, D, A}},
         interpmode::Interpolations.InterpolationType
     ) where {TX, TY, D, A}
     g = Grid(gf)
-    sitp = scale(interpolate(values(gf), interpmode), map(range, gridaxes(g))...)
-    GriddedFunctionInterpolation(gf, fill(sitp))
+    sitp = Interpolations.scale(Interpolations.interpolate(values(gf), interpmode), map(range, gridaxes(g))...)
+    GFInterpolation(gf, fill(sitp))
 end
 
-GriddedFunction(gfi::GriddedFunctionInterpolation) = gfi.gf
-Grid(gfi::GriddedFunctionInterpolation) = Grid(GriddedFunction(gfi))
+GriddedFunction(gfitp::GFInterpolation) = gfitp.gf
+Grid(gfitp::GFInterpolation) = Grid(GriddedFunction(gfitp))
 
 """
     interpolate(
         gf::GriddedFunction, interpmode::Interpolations.InterpolationType = BSpline(Linear())
     )
 
-Returns a `GriddedFunctionInterpolation` object based on `gf`, using
+Returns a [`GFInterpolation`](@ref) object based on `gf`, using
 `Interpolations.interpolate` under the hood to compute a scaled interpolation
 between all points on the continuous part of the grid of `gf`.
 """
 function interpolate(
-        gf::GriddedFunction, interpmode::Interpolations.InterpolationType = BSpline(Linear())
+        gf::GriddedFunction, interpmode::Interpolations.InterpolationType = Interpolations.BSpline(Interpolations.Linear())
     )
-    GriddedFunctionInterpolation(gf, interpmode)
+    GFInterpolation(gf, interpmode)
 end
 
 """
-    evaluate(gitp::GriddedFunctionInterpolation, x)
+    evaluate(gfitp::GFInterpolation, x)
 
-Evaluate the interpolated function at point `x`.
+Evaluate the interpolated function `gitp` at point `x`.
 
 Looks up the pre-computed interpolation for the discrete components of `x`,
 then evaluates it at the continuous components. `x` must be a tuple of type
 `TX` with the continuous components first, followed by the discrete components.
 """
-function evaluate(gitp::GriddedFunctionInterpolation{TX, TY, D, DD}, x::TX) where {TX, TY, D, DD}
-    disc_idx = searchdiscrete(Grid(gitp), x)
+function evaluate(gfitp::GFInterpolation{TX, TY, D, DD}, x::TX) where {TX, TY, D, DD}
+    disc_idx = searchdiscrete(Grid(gfitp), x)
     x_cont = ntuple(i -> x[i], Val(D - DD))
-    gitp.interpolations[disc_idx](x_cont...)
+    gfitp.interpolations[disc_idx](x_cont...)
 end
 
 
 # make interpolated function callable
-(gitp::GriddedFunctionInterpolation)(x::Vararg) = evaluate(gitp, x)
+(gfitp::GFInterpolation)(x::Vararg) = evaluate(gfitp, x)

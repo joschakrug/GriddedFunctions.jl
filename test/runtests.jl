@@ -1,6 +1,6 @@
 using Test
 using GriddedFunctions
-using Interpolations
+import Interpolations
 
 @testset "GriddedFunctions" begin
 
@@ -165,7 +165,7 @@ using Interpolations
         gf  = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
         gfi = interpolate(gf)
 
-        @test gfi isa GriddedFunctions.GriddedFunctionInterpolation
+        @test gfi isa GriddedFunctions.GFInterpolation
 
         # at grid-coincident points the interpolated value must match exactly
         @test gfi(0.0, 5.0, 0)  ≈ 0.0
@@ -193,7 +193,7 @@ using Interpolations
         gf  = GriddedFunction(Float64, grid, (x, y) -> x * y)
         gfi = interpolate(gf)
 
-        @test gfi isa GriddedFunctions.GriddedFunctionInterpolation
+        @test gfi isa GriddedFunctions.GFInterpolation
         @test gfi(3.7, 6.2) ≈ 3.7 * 6.2 atol=1e-6
         @test gfi(0.0, 0.0) ≈ 0.0
         @test gfi(10.0, 10.0) ≈ 100.0
