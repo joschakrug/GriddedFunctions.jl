@@ -9,15 +9,21 @@ following methods:
 
 - `Base.length`
 - `Base.getindex`
-- `search` (return the unique index of a value `x` if it is on the axis)
+- `Base.in`
+- [`search`](@ref)
 """
 abstract type Axis{T} <: AbstractVector{T} end
 
 Base.eltype(::Type{Axis{T}}) where T = T
 Base.size(ax::A) where {A <: Axis} = (length(ax),)
 
-"Search the index of value `x` on axis `ax` and raise an error if it is not on the axis."
-search(ax::Axis{T}, x::T) where T = search(ax, x)
+"""
+    search(ax::Axis{T}, x::T) where T
+
+Return the (integer) index of value `x` on axis `ax` and raise an error if `x`
+does not correspond to a point on `ax`.
+"""
+function search end
 
 """
     ContinuousAxis{T} <: Axis{T}
@@ -31,10 +37,6 @@ additional methods:
 - `Base.maximum`
 """
 abstract type ContinuousAxis{T} <: Axis{T} end
-
-function Base.in(value::T, axis::ContinuousAxis{T}) where T
-    value >= minimum(axis) && value <= maximum(axis)
-end
 
 """
     LinearAxis{T, S <: StepRangeLen{T}} <: ContinuousAxis{T}
@@ -63,9 +65,13 @@ Base.maximum(lax::LinearAxis) = maximum(range(lax))
 Base.iterate(lax::LinearAxis) = iterate(range(lax))
 Base.iterate(lax::LinearAxis, state) = iterate(range(lax), state)
 
-function _bestguessindex(lax::LinearAxis{T}, x::T) where T
-    (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
+function Base.in(x::T, axis::LinearAxis{T}) where T
+    x in range(axis)
 end
+
+# function _bestguessindex(lax::LinearAxis{T}, x::T) where T
+#     (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
+# end
 
 function search(lax::LinearAxis{T}, x::T) where T
     i = searchsortedlast(range(lax), x)
@@ -108,7 +114,7 @@ Base.in(value, dax::DiscreteAxis) = in(value, points(dax))
 function search(dax::DiscreteAxis{T}, x::T) where T
     pts = points(dax)
 
-    if (x >= pts[1]) & (x <= pts[end])
+    if pts[1] <= x <= pts[end]
         searchsortedfirst(pts, x)
     else
         error("$x not on axis.")
@@ -123,21 +129,43 @@ point is a tuple of type `T`.
 
 Each subtype of Grid needs to implement at least the following methods:
 
-- `axes`: return a `D`-dimensional tuple of axes
+- [`gridaxes`](@ref)
 """
 abstract type Grid{T, D} <: AbstractArray{T, D} end
 
-Base.in(x::T, g::Grid{T}) where T = all(x[d] in axes(g, d) for d in 1:D)
+"""
+    gridaxes(g::Grid, d = nothing)
+
+Return the tuple of axes spanning `g` (if `d = nothing`) or the `d`th axis of
+`g` (if `d` is specified).
+"""
+function gridaxes end
+
+Base.in(x::T, g::Grid{T, D}) where {T, D} = all(x[d] in gridaxes(g, d) for d in 1:D)
 
 """
     search(g::Grid{T, D}, x::T) where {T, D}
 
 Search the exact index of point `x` on grid `g`. Throw an error if it is not
 on the grid.
+
+Returns the CartesianIndex of `x` on the grid if `D > 1` and an integer
+index if `D = 1`.
 """
 function search(g::Grid{T, D}, x::T) where {T, D}
-    ntuple(d -> search(axes(g, d), x[d]), Val(D))
+    CartesianIndex(ntuple(d -> search(axes(g, d), x[d]), Val(D)))
 end
+
+search(g::Grid{T, 1}, x::T) where T = search(only(gridaxes(g)), x...)
+
+Base.eltype(::Type{<:Grid{T}}) where T = T
+Base.size(g::Grid{T, D}) where {T, D} = ntuple(d -> length(gridaxes(g, d)), D)
+
+function Base.getindex(g::Grid{T, D}, I::Vararg{Int, D}) where {T, D}
+    Tuple(gridaxes(g, d)[I[d]] for d in 1:D)
+end
+
+Base.getindex(g::Grid{T, 1}, i::Int) where T = only(gridaxes(g))[i]
 
 """
     ContinuousGrid{T, D, A <: NTuple{D, ContinuousAxis}} <: Grid{T, D}
@@ -161,8 +189,8 @@ end
 
 ContinuousGrid(axes::Vararg{ContinuousAxis}) = ContinuousGrid(axes)
 
-"Return the tuple of axes spanning `g`."
-axes(g::ContinuousGrid) = g.axes
+gridaxes(g::ContinuousGrid) = g.axes
+gridaxes(g::ContinuousGrid, d) = gridaxes(g)[d]
 
 """
     DiscreteGrid{T, D, A <: NTuple{D, DiscreteAxis}} <: Grid{T, D}
@@ -186,8 +214,8 @@ end
 
 DiscreteGrid(axes::Vararg{DiscreteAxis}) = DiscreteGrid(axes)
 
-"Return the tuple of axes spanning `g`."
-axes(g::DiscreteGrid) = g.axes
+gridaxes(g::DiscreteGrid) = g.axes
+gridaxes(g::DiscreteGrid, d) = gridaxes(g)[d]
 
 """
     MixedGrid{T, D, DC, DD, CG <: ContinuousGrid, DG <: DiscreteGrid} <: Grid{T, D}
@@ -208,7 +236,7 @@ struct MixedGrid{T, D, DC, DD, CG <: ContinuousGrid, DG <: DiscreteGrid} <: Grid
     discrete::DG
 
     function MixedGrid(continuous::ContinuousGrid{TC, DC, CA}, discrete::DiscreteGrid{TD, DD, DA}) where {TC, TD, DC, DD, CA, DA}
-        all_axes = (axes(continuous)..., axes(discrete)...)
+        all_axes = (gridaxes(continuous)..., gridaxes(discrete)...)
         T = Tuple{(eltype(a) for a in all_axes)...}
         D = DC + DD
         new{T, D, DC, DD, typeof(continuous), typeof(discrete)}(continuous, discrete)
@@ -222,13 +250,13 @@ continuousgrid(g::MixedGrid) = g.continuous
 discretegrid(g::MixedGrid) = g.discrete
 
 "Return the tuple of continuous axes of `g`."
-continuousaxes(g::MixedGrid) = axes(continuousgrid(g))
+continuousaxes(g::MixedGrid) = gridaxes(continuousgrid(g))
 
 "Return the tuple of discrete axes of `g`."
-discreteaxes(g::MixedGrid) = axes(discretegrid(g))
+discreteaxes(g::MixedGrid) = gridaxes(discretegrid(g))
 
-"Return the tuple of all axes spanning `g` (continuous first, then discrete)."
-axes(g::MixedGrid) = (continuousaxes(g)..., discreteaxes(g)...)
+gridaxes(g::MixedGrid) = (continuousaxes(g)..., discreteaxes(g)...)
+gridaxes(g::MixedGrid, d) = gridaxes(g)[d]
 
 """
     Grid(axes::Vararg{Axis})
@@ -263,25 +291,13 @@ function Grid(axs::Vararg{Axis})
     end
 end
 
-"Return the `d`-th axis of `g`."
-axes(g::Grid, d) = axes(g)[d]
-
-Base.eltype(::Type{<:Grid{T}}) where T = T
-Base.size(g::Grid{T, D}) where {T, D} = ntuple(d -> length(axes(g, d)), D)
-
-function Base.getindex(g::Grid{T, D}, I::Vararg{Int, D}) where {T, D}
-    Tuple(axes(g, d)[I[d]] for d in 1:D)
-end
-
-Base.getindex(g::Grid{T, 1}, i::Int) where T = only(axes(g))[i]
-
 """
     discretecomponent(g::MixedGrid, x)
 
 Return the discrete components of grid point `x` as a tuple (i.e. elements
 `DC+1` through `D`).
 """
-function discretecomponent(g::MixedGrid{T, D, DC}, x::T) where {T, D, DC}
+function discretecomponent(::MixedGrid{T, D, DC}, x::T) where {T, D, DC}
     x[(DC + 1):D]
 end
 
@@ -291,26 +307,25 @@ end
 Return the continuous components of grid point `x` as a tuple (i.e. the first
 `DC` elements).
 """
-function continuouscomponent(g::MixedGrid{T, D, DC}, x::T) where {T, D, DC}
+function continuouscomponent(::MixedGrid{T, D, DC}, x::T) where {T, D, DC}
     x[1:DC]
 end
 
 """
     searchdiscrete(g::Grid, x)
 
-Return the index tuple into the discrete axes of `g` for point `x`.
+Return the Cartesian index of the discrete components of point `x` on the discrete
+axes of `g`.
 
-For a `ContinuousGrid` this is always `()`. For a `MixedGrid` it is an
-`NTuple{DD, Int}` giving the position of each discrete component on its axis,
+For a `ContinuousGrid` this is always `CartesianIndex()`. For a `MixedGrid` it is an
+`CartesianIndex{DD}` giving the position of each discrete component on its axis,
 found via `searchsortedfirst`. Throws an error if any discrete component of
 `x` is outside the range of its axis.
 """
-searchdiscrete(::ContinuousGrid, _) = ()
+searchdiscrete(::ContinuousGrid, _) = CartesianIndex()
 
 function searchdiscrete(g::MixedGrid{T, D, DC, DD}, x::T) where {T, D, DC, DD}
     search(discretegrid(g), discretecomponent(g, x))
 end
 
 searchdiscrete(g::DiscreteGrid{T}, x::T) where T = search(g, x)
-
-

@@ -7,6 +7,6 @@ include("grids.jl")
 include("functions.jl")
 
 export Axis, LinearAxis, DiscreteAxis, Grid
-export GriddedFunction
+export GriddedFunction, GriddedFunctionInterpolation
 
 end # module GriddedFunctions

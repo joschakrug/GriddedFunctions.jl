@@ -17,10 +17,10 @@ type of a grid point (a `Tuple` of axis element types).
 Construct from a pre-computed array of values. `size(values)` must match
 `size(g)`.
 
-    GriddedFunction(g::Grid, f::Function, T::Type)
+    GriddedFunction(T::Type, g::Grid, f::Function)
 
 Construct by evaluating `f` at every grid point. The return type of `f` must
-be `T`.
+be convertible to `T`.
 """
 mutable struct GriddedFunction{TX, TY <: Real, D, G <: Grid{TX, D}} <: AbstractArray{TY, D}
     grid::G
@@ -28,7 +28,7 @@ mutable struct GriddedFunction{TX, TY <: Real, D, G <: Grid{TX, D}} <: AbstractA
 
     function GriddedFunction(g::Grid, values)
         @assert size(g) == size(values)
-        D = length(size(g))
+        D = ndims(g)
         new{eltype(g), eltype(values), D, typeof(g)}(g, values)
     end
 end
@@ -238,13 +238,25 @@ function GriddedFunctionInterpolation(
         interpmode::Interpolations.InterpolationType
     ) where {TX, TY, D, A}
     g = Grid(gf)
-    sitp = scale(interpolate(values(gf), interpmode), map(range, axes(g))...)
+    sitp = scale(interpolate(values(gf), interpmode), map(range, gridaxes(g))...)
     GriddedFunctionInterpolation(gf, fill(sitp))
 end
 
-function Interpolations.interpolate(
-        gf::GriddedFunction, interpmode::IT = BSpline(Linear())
-    ) where {IT <: Union{Interpolations.NoInterp, Interpolations.BSpline}}
+GriddedFunction(gfi::GriddedFunctionInterpolation) = gfi.gf
+Grid(gfi::GriddedFunctionInterpolation) = Grid(GriddedFunction(gfi))
+
+"""
+    interpolate(
+        gf::GriddedFunction, interpmode::Interpolations.InterpolationType = BSpline(Linear())
+    )
+
+Returns a `GriddedFunctionInterpolation` object based on `gf`, using
+`Interpolations.interpolate` under the hood to compute a scaled interpolation
+between all points on the continuous part of the grid of `gf`.
+"""
+function interpolate(
+        gf::GriddedFunction, interpmode::Interpolations.InterpolationType = BSpline(Linear())
+    )
     GriddedFunctionInterpolation(gf, interpmode)
 end
 
@@ -258,9 +270,9 @@ then evaluates it at the continuous components. `x` must be a tuple of type
 `TX` with the continuous components first, followed by the discrete components.
 """
 function evaluate(gitp::GriddedFunctionInterpolation{TX, TY, D, DD}, x::TX) where {TX, TY, D, DD}
-    disc_idx = searchdiscrete(Grid(gitp.gf), x)
+    disc_idx = searchdiscrete(Grid(gitp), x)
     x_cont = ntuple(i -> x[i], Val(D - DD))
-    gitp.interpolations[disc_idx...](x_cont...)
+    gitp.interpolations[disc_idx](x_cont...)
 end
 
 

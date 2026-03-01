@@ -14,7 +14,7 @@ using Interpolations
         @test lax[end] ≈ 10.0
 
         # membership
-        @test 5.0 in lax
+        @test 0.0 in lax
         @test -1.0 ∉ lax
         @test 11.0 ∉ lax
 
