@@ -8,7 +8,7 @@ import Interpolations
         x::Float64
     end
 
-    SimpleType(iter::Base.Generator) = SimpleType(iter...)
+    # SimpleType(iter::Base.Generator) = SimpleType(iter...)
     Base.getindex(m::SimpleType, i) = i == 1 ? m.x : nothing
 
     struct MyType

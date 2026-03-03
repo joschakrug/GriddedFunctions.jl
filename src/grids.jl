@@ -196,9 +196,9 @@ function Base.getindex(g::Grid{T, D}, I::Vararg{Int, D}) where {T, D}
     T(gridaxes(g, d)[I[d]] for d in 1:D)
 end
 
-# function Base.getindex(g::Grid{T, 1}, I::Int) where T
-#     T(gridaxes(g, 1)[I])
-# end
+function Base.getindex(g::Grid{T, 1}, I::Int) where T
+    T(gridaxes(g, 1)[I])
+end
 
 """
     ContinuousGrid{T, D, A <: NTuple{D, ContinuousAxis}} <: Grid{T, D}

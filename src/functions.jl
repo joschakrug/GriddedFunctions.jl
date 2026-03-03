@@ -303,3 +303,4 @@ end
 # make interpolated function callable
 (gfitp::GFInterpolation{TX})(x::Vararg) where TX = evaluate(gfitp, TX(x))
 (gfitp::GFInterpolation{TX})(x::TX) where TX = evaluate(gfitp, x)
+(gfitp::GFInterpolation{TX, TY, 1})(x) where {TX, TY} = evaluate(gfitp, TX(x))
