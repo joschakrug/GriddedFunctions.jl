@@ -8,7 +8,7 @@ This is useful in particular when trying to solve dynamic problems via value fun
 
 Imagine you want to approximate a function of three variables, two of which live in a continuous range and one of which can only take a discrete set of values. Using the `GriddedFunctions.jl` package, you can easily set up such a function as follows:
 
-```{julia}
+```julia
 using GriddedFunctions
 
 grid = Grid(
@@ -26,7 +26,7 @@ gf = GriddedFunction(
 
 If you want to perform a simple grid search optimisation of `gf`, this is as easy as using Julia's built-in `findmax` function:
 
-```{julia}
+```julia
 maxval, maxidx = findmax(gf)
 
 # return the actual (x, y, z) values that maximise gf on the given grid
@@ -35,9 +35,7 @@ grid[maxidx]
 
 If you want to get an interpolated continuous version of `gfi`, the package provides an implementation of the `Interpolations.interpolate` method tailored to gridded functions. It will interpolate between values on continuous axes but only accept exact values on discrete axes:
 
-```{julia}
-using Interpolations
-
+```julia
 gfi = interpolate(gf)
 
 # valid
