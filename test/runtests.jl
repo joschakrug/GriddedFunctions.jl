@@ -4,6 +4,14 @@ import Interpolations
 
 @testset "GriddedFunctions" begin
 
+    struct MyType
+        x::Float64
+        y::Int64
+    end
+
+    MyType(iter) = MyType(iter...)
+    Base.getindex(m::MyType, i) = getfield(m, i)
+
     @testset "LinearAxis" begin
         lax = LinearAxis(range(0.0, 10.0, length = 100))
 
@@ -64,6 +72,15 @@ import Interpolations
         @test mg[end, end, end] == (10.0, 20.0, 1)
     end
 
+    @testset "Grid construction with custom type" begin
+        g = Grid(MyType, LinearAxis(range(0., 10., length = 50)), DiscreteAxis([2, 3, 4]))
+
+        @test g[1, 1] == MyType(0., 2)
+        @test GriddedFunctions.finddiscrete(g, MyType(0.2, 3)) == 2
+        @test GriddedFunctions.find(g, MyType(0., 4)) == CartesianIndex(1, 3)
+        @test GriddedFunctions.decompose(g, MyType(0., 4)) == (tuple(0.), tuple(4))
+    end
+
     @testset "GriddedFunction — construction" begin
         grid = Grid(
             LinearAxis(range(0.0, 10.0, length = 500)),
@@ -103,12 +120,12 @@ import Interpolations
         @test gfdiv[2, 3, 1]  ≈ gf1[2, 3, 1] / gf2[2, 3, 1]
     end
 
-    @testset "GriddedFunction — pairs" begin
+    @testset "GriddedFunction — points" begin
         # 1-D: keys are scalars (matching 1-D grid iteration), values are function values
         g1  = Grid(LinearAxis(range(0.0, 1.0; length=5)))
         gf1 = GriddedFunction(Float64, g1, x -> x^2)
 
-        ps1 = collect(pairs(gf1))
+        ps1 = collect(points(gf1))
         @test length(ps1) == 5
         @test all(p isa Pair for p in ps1)
 
@@ -117,15 +134,15 @@ import Interpolations
             @test p.first  == x
             @test p.second ≈ fx
         end
-        # values satisfy the defining relation
-        @test all(p.second ≈ p.first^2 for p in ps1)
+        # values satisfy the defining relation (p.first is a 1-element Tuple)
+        @test all(p.second ≈ only(p.first)^2 for p in ps1)
 
         # 2-D: keys are Tuples, values are function values
         g2  = Grid(LinearAxis(range(0.0, 1.0; length=3)),
                    LinearAxis(range(0.0, 2.0; length=4)))
         gf2 = GriddedFunction(Float64, g2, (x, y) -> x + y)
 
-        ps2 = collect(pairs(gf2))
+        ps2 = collect(points(gf2))
         @test length(ps2) == 3 * 4
         @test all(p isa Pair for p in ps2)
 
@@ -148,10 +165,26 @@ import Interpolations
         # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
         gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
 
-        maxval, maxpt = findmax(gf)
+        maxval, maxI = findmax(gf)
 
         @test maxval ≈ 10.0 * 20.0 * exp(1)
-        # findmax now returns the grid point directly (via pairs)
+        @test maxI == CartesianIndex(500, 500, 2)
+    end
+
+    @testset "GriddedFunction — maxpoint" begin
+        grid = Grid(
+            LinearAxis(range(0.0, 10.0, length = 500)),
+            LinearAxis(range(5.0, 20.0, length = 500)),
+            DiscreteAxis([0, 1])
+        )
+
+        # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
+        gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
+
+        maxpt, maxval = maxpoint(gf)
+
+        @test maxval ≈ 10.0 * 20.0 * exp(1)
+        # maxpoint returns the grid point directly (via pairs)
         @test maxpt == (10.0, 20.0, 1)
     end
 
@@ -197,6 +230,58 @@ import Interpolations
         @test gfi(3.7, 6.2) ≈ 3.7 * 6.2 atol=1e-6
         @test gfi(0.0, 0.0) ≈ 0.0
         @test gfi(10.0, 10.0) ≈ 100.0
+    end
+
+    @testset "Custom point type" begin
+        # Minimal custom point type replacing the default Tuple{Float64, Float64}.
+        # Must satisfy the Grid{T} interface:
+        #   - T(a, b)       positional constructor  (used by getindex)
+        #   - T(t::Tuple)   from-Tuple constructor  (used by the GFInterpolation callable)
+        #   - p[i]          component access        (used by Base.in, decompose, find)
+        #   - iterate/length                        (used for splatting in evaluate)
+        struct MyPoint
+            x::Float64
+            y::Float64
+        end
+
+        MyPoint(iter)                 = MyPoint(iter...)
+        Base.getindex(p::MyPoint, i)  = i == 1 ? p.x : p.y
+        Base.iterate(p::MyPoint, s=1) = s > 2 ? nothing : (p[s], s + 1)
+
+        g = Grid(
+            MyPoint,
+            LinearAxis(range(0.0, 5.0; length = 100)),
+            DiscreteAxis([0.0, 4.5, 5.0])
+        )
+
+        # grid type and indexing
+        @test g isa GriddedFunctions.MixedGrid{MyPoint}
+        @test g[1, 1]     == MyPoint(0.0, 0.0)
+        @test g[end, end] == MyPoint(5.0, 5.0)
+
+        # membership (exercises p[d])
+        @test  g[1, 1]     in g      # corner points are always on the grid
+        @test  g[end, end] in g
+        @test  MyPoint(-1.0, 2.0) ∉ g   # x < 0 is outside the grid
+
+        # GriddedFunction construction and indexing
+        gf = GriddedFunction(Float64, g, (x, y) -> x + y)
+        @test gf isa GriddedFunction
+        @test gf[1, 1]     ≈ 0.0
+        @test gf[end, end] ≈ 10.0
+
+        # Interpolation construction
+        gfi = interpolate(gf)
+        @test gfi isa GriddedFunctions.GFInterpolation
+
+        # f(x, y) = x + y is linear, so BSpline(Linear()) is exact everywhere
+        @test gfi(0.0, 0.0) ≈ 0.0
+        @test gfi(5.0, 5.0) ≈ 10.0
+        @test gfi(0.5, 4.5) ≈ 5.0 atol=1e-10
+
+        # evaluate with a MyPoint directly (exercises the TX dispatch path)
+        @test GriddedFunctions.evaluate(gfi, MyPoint(0.5, 4.5)) ≈ 5.0 atol=1e-10
+        @test gfi(MyPoint(0.5, 4.5)) ≈ 5.0 atol=1e-10
     end
 
 end
