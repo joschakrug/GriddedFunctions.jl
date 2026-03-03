@@ -82,6 +82,14 @@ end
 Base.eltype(::Type{GriddedFunction{TX, TY}}) where {TX, TY} = TY
 Base.size(gf::GriddedFunction) = size(grid(gf))
 
+"""
+    Base.similar(gf::GriddedFunction)
+
+Create an uninitialised `GriddedFunction` over the same grid as `gf`, and with
+the same element type.
+"""
+Base.similar(gf::GriddedFunction{TX, TY}) where {TX, TY} = GriddedFunction(TY, grid(gf), undef)
+
 function Base.getindex(gf::GriddedFunction{TX, TY, D}, I::Vararg{Int, D}) where {TX, TY, D}
     values(gf)[I...]
 end
@@ -179,6 +187,17 @@ function xmap!(f, gf::GriddedFunction)
         v[I] = f(g[I])
     end
     gf
+end
+
+"""
+    xmap(f, gf::GriddedFunction)
+
+Like [`xmap`](@ref) but generates a new gridded function over the same grid as
+`gf`.
+"""
+function xmap(f, gf::GriddedFunction)
+    gf_new = similar(gf)
+    xmap!(f, gf_new)
 end
 
 """
