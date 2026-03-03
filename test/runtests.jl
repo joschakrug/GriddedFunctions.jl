@@ -4,6 +4,13 @@ import Interpolations
 
 @testset "GriddedFunctions" begin
 
+    struct SimpleType
+        x::Float64
+    end
+
+    # SimpleType(iter) = SimpleType(iter...)
+    Base.getindex(m::SimpleType, i) = i == 1 ? m.x : nothing
+
     struct MyType
         x::Float64
         y::Int64
@@ -79,6 +86,9 @@ import Interpolations
         @test GriddedFunctions.finddiscrete(g, MyType(0.2, 3)) == 2
         @test GriddedFunctions.find(g, MyType(0., 4)) == CartesianIndex(1, 3)
         @test GriddedFunctions.decompose(g, MyType(0., 4)) == (tuple(0.), tuple(4))
+
+        g = Grid(SimpleType, LinearAxis(range(0., 10., length = 50)))
+        @test g[1] == SimpleType(0.)
     end
 
     @testset "GriddedFunction — construction" begin

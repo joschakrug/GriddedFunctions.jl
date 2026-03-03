@@ -187,13 +187,17 @@ function find(g::Grid{T, D}, x::T) where {T, D}
     CartesianIndex(ntuple(d -> find(gridaxes(g, d), x[d]), Val(D)))
 end
 
-find(g::Grid{T, 1}, x::T) where T = find(only(gridaxes(g)), x...)
+find(g::Grid{T, 1}, x::T) where T = find(only(gridaxes(g)), x[1])
 
 Base.eltype(::Type{<: Grid{T}}) where T = T
 Base.size(g::Grid{T, D}) where {T, D} = ntuple(d -> length(gridaxes(g, d)), D)
 
 function Base.getindex(g::Grid{T, D}, I::Vararg{Int, D}) where {T, D}
     T(gridaxes(g, d)[I[d]] for d in 1:D)
+end
+
+function Base.getindex(g::Grid{T, 1}, I::Int) where T
+    T(gridaxes(g, 1)[I])
 end
 
 """
