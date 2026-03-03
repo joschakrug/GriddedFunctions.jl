@@ -10,6 +10,7 @@ import Interpolations
 
     # SimpleType(iter::Base.Generator) = SimpleType(iter...)
     Base.getindex(m::SimpleType, i) = i == 1 ? m.x : nothing
+    Base.iterate(m::SimpleType, s=1) = s > 1 ? nothing : (m.x, s + 1)
 
     struct MyType
         x::Float64
@@ -292,6 +293,44 @@ import Interpolations
         # evaluate with a MyPoint directly (exercises the TX dispatch path)
         @test GriddedFunctions.evaluate(gfi, MyPoint(0.5, 4.5)) ≈ 5.0 atol=1e-10
         @test gfi(MyPoint(0.5, 4.5)) ≈ 5.0 atol=1e-10
+    end
+
+    @testset "Custom singleton type" begin
+
+        g = Grid(
+            SimpleType,
+            LinearAxis(range(0.0, 5.0; length = 100))
+        )
+
+        # grid type and indexing
+        @test g isa GriddedFunctions.ContinuousGrid{SimpleType}
+        @test g[1]      == SimpleType(0.0)
+        @test g[end]    == SimpleType(5.0)
+
+        # membership (exercises p[d])
+        @test  g[1]     in g      # corner points are always on the grid
+        @test  g[end]   in g
+        @test  SimpleType(-1.0) ∉ g   # x < 0 is outside the grid
+
+        # GriddedFunction construction and indexing
+        gf = GriddedFunction(Float64, g, x -> x^2)
+        @test gf isa GriddedFunction
+        @test gf[1]     ≈ 0.0
+        @test gf[end] ≈ 25.0
+
+        # Interpolation construction
+        gfi = interpolate(gf)
+        @test gfi isa GriddedFunctions.GFInterpolation
+
+        # f(x, y) = x + y is linear, so BSpline(Linear()) is exact everywhere
+        @test gfi(0.0) ≈ 0.0
+        @test gfi(5.0) ≈ 25.0
+        @test gfi(3.0) ≈ 9.0 atol=1e-2
+
+        # evaluate with a MyPoint directly (exercises the TX dispatch path)
+        @test GriddedFunctions.evaluate(gfi, SimpleType(2.0)) ≈ 4.0 atol=1e-2
+        @test gfi(SimpleType(2.0)) ≈ 4.0 atol=1e-2
+        @test gfi(2.0) ≈ 4.0 atol=1e-2
     end
 
 end
