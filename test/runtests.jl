@@ -327,7 +327,11 @@ import Interpolations
         @test gfi(5.0) ≈ 25.0
         @test gfi(3.0) ≈ 9.0 atol=1e-2
 
-        # evaluate with a MyPoint directly (exercises the TX dispatch path)
+        @test GriddedFunctions.finddiscrete(g, SimpleType(5.0)) == CartesianIndex()
+        @test first(GriddedFunctions.decompose(g, SimpleType(5.0))) == (5.0,)
+        @test gfi.interpolations[CartesianIndex()](5.0) ≈ 25 atol=1e-2
+
+        # evaluate with a SimpleType directly (exercises the TX dispatch path)
         @test GriddedFunctions.evaluate(gfi, SimpleType(2.0)) ≈ 4.0 atol=1e-2
         @test gfi(SimpleType(2.0)) ≈ 4.0 atol=1e-2
         @test gfi(2.0) ≈ 4.0 atol=1e-2

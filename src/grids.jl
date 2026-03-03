@@ -230,7 +230,7 @@ ContinuousGrid(axes::Vararg{ContinuousAxis}) = ContinuousGrid(axes)
 gridaxes(g::ContinuousGrid) = g.axes
 gridaxes(g::ContinuousGrid, d) = gridaxes(g)[d]
 
-decompose(::ContinuousGrid, x) = (x, ())
+decompose(::ContinuousGrid{T, D}, x::T) where {T, D} = (ntuple(d -> x[d], Val(D)), ())
 finddiscrete(::ContinuousGrid, _) = CartesianIndex()
 
 """
@@ -263,7 +263,7 @@ DiscreteGrid(axes::Vararg{DiscreteAxis}) = DiscreteGrid(axes)
 gridaxes(g::DiscreteGrid) = g.axes
 gridaxes(g::DiscreteGrid, d) = gridaxes(g)[d]
 
-decompose(::DiscreteGrid, x) = ((), x)
+decompose(::DiscreteGrid{T, D}, x::T) where {T, D} = ((), ntuple(d -> x[d], Val(D)))
 finddiscrete(g::DiscreteGrid{T}, x::T) where T = find(g, x)
 
 """
