@@ -1,123 +1,3 @@
-
-"""
-    Axis{T} <: AbstractVector{T}
-
-A grid axis with axis element type `T`.
-
-Each subtype of the abstract type `Axis{T}` needs to define at least the
-following methods:
-
-- `Base.length`
-- `Base.getindex`
-- `Base.in`
-- [`find`](@ref)
-"""
-abstract type Axis{T} <: AbstractVector{T} end
-
-Base.eltype(::Type{Axis{T}}) where T = T
-Base.size(ax::A) where {A <: Axis} = (length(ax),)
-
-"""
-    find(ax::Axis{T}, x::T) where T
-
-Return the (integer) index of value `x` on axis `ax` and raise an error if `x`
-does not correspond to a point on `ax`.
-"""
-function find end
-
-"""
-    ContinuousAxis{T} <: Axis{T}
-
-A grid axis representing a continuous range of values of type `T`.
-
-Each subtype of the abstract type `ContinuousAxis{T}` needs to define the
-additional methods:
-
-- `Base.minimum`
-- `Base.maximum`
-"""
-abstract type ContinuousAxis{T} <: Axis{T} end
-
-"""
-    LinearAxis{T, S <: StepRangeLen{T}} <: ContinuousAxis{T}
-
-A linearly scaled continuous grid axis representing values of type `T`.
-
-`S` is just an auxiliary parameter to ensure type stability.
-
-# Constructor
-
-    LinearAxis(r::StepRangeLen{T})
-
-Construct a linear axis from a step range `r`. Use `range(start, stop; length=n)`
-or `range(start, stop; step=s)` to create suitable ranges.
-"""
-struct LinearAxis{T, S <: StepRangeLen{T}} <: ContinuousAxis{T}
-    range::S
-end
-
-Base.range(lax::LinearAxis) = lax.range
-
-for f in (:length, :getindex, :minimum, :maximum, :iterate)
-    @eval Base.$f(lax::LinearAxis, args...) = Base.$f(range(lax), args...)
-end
-
-function Base.in(x::T, axis::LinearAxis{T}) where T
-    x in range(axis)
-end
-
-# function _bestguessindex(lax::LinearAxis{T}, x::T) where T
-#     (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
-# end
-
-function find(lax::LinearAxis{T}, x::T) where T
-    i = searchsortedlast(range(lax), x)
-    @assert lax[i] ≈ x
-    i
-end
-
-
-"""
-    DiscreteAxis{T} <: Axis{T}
-
-An axis representing discrete but ordered values of type `T`.
-
-# Constructor
-
-    DiscreteAxis(points::Vector{T})
-
-Construct a discrete axis from a sorted vector of points. Throws an error if
-`points` is not in ascending order.
-"""
-struct DiscreteAxis{T} <: Axis{T}
-    points::Vector{T}
-
-    function DiscreteAxis(points::Vector{T}) where T
-        if all(points[i] < points[i + 1] for i in 1:(length(points) - 1))
-            new{T}(points)
-        else
-            error("Points on axis need to be unique and stored in ascending order.")
-        end
-    end
-end
-
-"Return the underlying sorted vector of points of `dax`."
-points(dax::DiscreteAxis) = dax.points
-
-Base.length(dax::DiscreteAxis) = length(points(dax))
-Base.getindex(dax::DiscreteAxis, i) = getindex(points(dax), i)
-Base.in(value, dax::DiscreteAxis) = in(value, points(dax))
-
-function find(dax::DiscreteAxis{T}, x::T) where T
-    pts = points(dax)
-
-    if pts[1] <= x <= pts[end]
-        searchsortedfirst(pts, x)
-    else
-        error("$x not on axis.")
-    end
-end
-
 """
     Grid{T, D} <: AbstractArray{T, D}
 
@@ -133,6 +13,8 @@ Each subtype of Grid needs to implement at least the following methods:
 - [`gridaxes`](@ref)
 - [`decompose`](@ref)
 - [`finddiscrete`](@ref)
+- [`continuousgrid`]
+- [`discretegrid`]
 """
 abstract type Grid{T, D} <: AbstractArray{T, D} end
 
@@ -201,6 +83,53 @@ function Base.getindex(g::Grid{T, 1}, I::Int) where T
 end
 
 """
+    continuousaxes(g::Grid)
+
+Return the tuple of continuous axes of `g`. Returns an empty `ContinuousGrid()`
+if `g` does not have any continuous axes.
+"""
+continuousaxes(g::Grid) = gridaxes(continuousgrid(g))
+
+"""
+    discreteaxes(g::Grid)
+
+Return the tuple of discrete axes of `g`. Returns an empty `DiscreteGrid()`
+if `g` does not have any continuous axes.
+"""
+discreteaxes(g::Grid) = gridaxes(discretegrid(g))
+
+"""
+    inbounds(x::T, g::Grid{T}) where T
+
+Check whether point `x` lies within the valid domain of grid `g`.
+
+- For each **continuous** axis the corresponding coordinate of `x` must lie
+  within the closed interval `[minimum(ax), maximum(ax)]`.
+- For each **discrete** axis the coordinate of `x` must equal an axis point
+  exactly (i.e. `coord in ax`).
+
+Returns `true` if all components satisfy their respective conditions,
+`false` otherwise.  Unlike [`Base.in`](@ref), continuous coordinates are only
+required to be in-range, not to coincide with an exact grid point.
+
+# Examples
+
+```julia
+g = Grid(LinearAxis(range(0.0, 1.0; length=100)), DiscreteAxis([0, 1]))
+inbounds((0.42, 1), g)   # true  – 0.42 is in [0,1] and 1 is on the discrete axis
+inbounds((1.5,  0), g)   # false – 1.5 is out of range
+inbounds((0.5,  2), g)   # false – 2 is not on the discrete axis
+```
+"""
+function inbounds(x::T, g::Grid{T}) where T
+    x_cont, x_disc = decompose(g, x)
+    cont_ok = all(minimum(ax) <= x_cont[d] <= maximum(ax) for (d, ax) in enumerate(continuousaxes(g)))
+    disc_ok = all(x_disc[d] in ax for (d, ax) in enumerate(discreteaxes(g)))
+    cont_ok && disc_ok
+end
+
+
+"""
     ContinuousGrid{T, D, A <: NTuple{D, ContinuousAxis}} <: Grid{T, D}
 
 A grid spanned by `D` continuous axes. `T` is the type of a grid point
@@ -230,6 +159,8 @@ ContinuousGrid(axes::Vararg{ContinuousAxis}) = ContinuousGrid(axes)
 gridaxes(g::ContinuousGrid) = g.axes
 gridaxes(g::ContinuousGrid, d) = gridaxes(g)[d]
 
+continuousgrid(g::ContinuousGrid) = g
+discretegrid(::ContinuousGrid) = DiscreteGrid()
 decompose(::ContinuousGrid{T, D}, x::T) where {T, D} = (ntuple(d -> x[d], Val(D)), ())
 finddiscrete(::ContinuousGrid, _) = CartesianIndex()
 
@@ -263,6 +194,8 @@ DiscreteGrid(axes::Vararg{DiscreteAxis}) = DiscreteGrid(axes)
 gridaxes(g::DiscreteGrid) = g.axes
 gridaxes(g::DiscreteGrid, d) = gridaxes(g)[d]
 
+continuousgrid(::DiscreteGrid) = ContinuousGrid()
+discretegrid(g::DiscreteGrid) = g
 decompose(::DiscreteGrid{T, D}, x::T) where {T, D} = ((), ntuple(d -> x[d], Val(D)))
 finddiscrete(g::DiscreteGrid{T}, x::T) where T = find(g, x)
 
@@ -298,17 +231,8 @@ function MixedGrid(continuous::ContinuousGrid{TC, DC, CA}, discrete::DiscreteGri
     MixedGrid{T}(continuous, discrete)
 end
 
-"Return the `ContinuousGrid` component of `g`."
 continuousgrid(g::MixedGrid) = g.continuous
-
-"Return the `DiscreteGrid` component of `g`."
 discretegrid(g::MixedGrid) = g.discrete
-
-"Return the tuple of continuous axes of `g`."
-continuousaxes(g::MixedGrid) = gridaxes(continuousgrid(g))
-
-"Return the tuple of discrete axes of `g`."
-discreteaxes(g::MixedGrid) = gridaxes(discretegrid(g))
 
 gridaxes(g::MixedGrid) = (continuousaxes(g)..., discreteaxes(g)...)
 gridaxes(g::MixedGrid, d) = gridaxes(g)[d]
@@ -358,44 +282,4 @@ end
 function finddiscrete(g::MixedGrid{T, D, DC, DD}, x::T) where {T, D, DC, DD}
     _, x_disc = decompose(g, x)
     find(discretegrid(g), x_disc)
-end
-
-"""
-    inbounds(x::T, g::Grid{T}) where T
-
-Check whether point `x` lies within the valid domain of grid `g`.
-
-- For each **continuous** axis the corresponding coordinate of `x` must lie
-  within the closed interval `[minimum(ax), maximum(ax)]`.
-- For each **discrete** axis the coordinate of `x` must equal an axis point
-  exactly (i.e. `coord in ax`).
-
-Returns `true` if all components satisfy their respective conditions,
-`false` otherwise.  Unlike [`Base.in`](@ref), continuous coordinates are only
-required to be in-range, not to coincide with an exact grid point.
-
-# Examples
-
-```julia
-g = Grid(LinearAxis(range(0.0, 1.0; length=100)), DiscreteAxis([0, 1]))
-inbounds((0.42, 1), g)   # true  – 0.42 is in [0,1] and 1 is on the discrete axis
-inbounds((1.5,  0), g)   # false – 1.5 is out of range
-inbounds((0.5,  2), g)   # false – 2 is not on the discrete axis
-```
-"""
-function inbounds(x::T, g::ContinuousGrid{T, D}) where {T, D}
-    x_cont, _ = decompose(g, x)
-    all(minimum(ax) <= x_cont[d] <= maximum(ax) for (d, ax) in enumerate(gridaxes(g)))
-end
-
-function inbounds(x::T, g::DiscreteGrid{T, D}) where {T, D}
-    _, x_disc = decompose(g, x)
-    all(x_disc[d] in ax for (d, ax) in enumerate(gridaxes(g)))
-end
-
-function inbounds(x::T, g::MixedGrid{T, D, DC, DD}) where {T, D, DC, DD}
-    x_cont, x_disc = decompose(g, x)
-    cont_ok = all(minimum(ax) <= x_cont[d] <= maximum(ax) for (d, ax) in enumerate(continuousaxes(g)))
-    disc_ok = all(x_disc[d] in ax for (d, ax) in enumerate(discreteaxes(g)))
-    cont_ok && disc_ok
 end

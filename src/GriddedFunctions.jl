@@ -2,7 +2,7 @@ module GriddedFunctions
 
 import Interpolations
 
-# include("triangular.jl")
+include("axes.jl")
 include("grids.jl")
 include("functions.jl")
 
