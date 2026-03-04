@@ -359,3 +359,43 @@ function finddiscrete(g::MixedGrid{T, D, DC, DD}, x::T) where {T, D, DC, DD}
     _, x_disc = decompose(g, x)
     find(discretegrid(g), x_disc)
 end
+
+"""
+    inbounds(x::T, g::Grid{T}) where T
+
+Check whether point `x` lies within the valid domain of grid `g`.
+
+- For each **continuous** axis the corresponding coordinate of `x` must lie
+  within the closed interval `[minimum(ax), maximum(ax)]`.
+- For each **discrete** axis the coordinate of `x` must equal an axis point
+  exactly (i.e. `coord in ax`).
+
+Returns `true` if all components satisfy their respective conditions,
+`false` otherwise.  Unlike [`Base.in`](@ref), continuous coordinates are only
+required to be in-range, not to coincide with an exact grid point.
+
+# Examples
+
+```julia
+g = Grid(LinearAxis(range(0.0, 1.0; length=100)), DiscreteAxis([0, 1]))
+inbounds((0.42, 1), g)   # true  – 0.42 is in [0,1] and 1 is on the discrete axis
+inbounds((1.5,  0), g)   # false – 1.5 is out of range
+inbounds((0.5,  2), g)   # false – 2 is not on the discrete axis
+```
+"""
+function inbounds(x::T, g::ContinuousGrid{T, D}) where {T, D}
+    x_cont, _ = decompose(g, x)
+    all(minimum(ax) <= x_cont[d] <= maximum(ax) for (d, ax) in enumerate(gridaxes(g)))
+end
+
+function inbounds(x::T, g::DiscreteGrid{T, D}) where {T, D}
+    _, x_disc = decompose(g, x)
+    all(x_disc[d] in ax for (d, ax) in enumerate(gridaxes(g)))
+end
+
+function inbounds(x::T, g::MixedGrid{T, D, DC, DD}) where {T, D, DC, DD}
+    x_cont, x_disc = decompose(g, x)
+    cont_ok = all(minimum(ax) <= x_cont[d] <= maximum(ax) for (d, ax) in enumerate(continuousaxes(g)))
+    disc_ok = all(x_disc[d] in ax for (d, ax) in enumerate(discreteaxes(g)))
+    cont_ok && disc_ok
+end

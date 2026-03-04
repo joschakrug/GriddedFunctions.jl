@@ -337,4 +337,62 @@ import Interpolations
         @test gfi(2.0) ≈ 4.0 atol=1e-2
     end
 
+    @testset "inbounds — ContinuousGrid" begin
+        g = Grid(
+            LinearAxis(range(0.0, 10.0; length = 100)),
+            LinearAxis(range(5.0, 20.0; length = 100))
+        )
+
+        # interior point
+        @test  inbounds((3.7, 12.0), g)
+        # boundary points are in-bounds
+        @test  inbounds((0.0, 5.0),  g)
+        @test  inbounds((10.0, 20.0), g)
+        # outside on first axis
+        @test !inbounds((-0.1, 10.0), g)
+        @test !inbounds((10.1, 10.0), g)
+        # outside on second axis
+        @test !inbounds((5.0, 4.9),  g)
+        @test !inbounds((5.0, 20.1), g)
+        # non-grid-coincident interior point is still in-bounds (unlike Base.in)
+        @test  inbounds((0.001, 5.001), g)
+        @test  (0.001, 5.001) ∉ g
+    end
+
+    @testset "inbounds — DiscreteGrid" begin
+        g = Grid(DiscreteAxis([1, 3, 5]))
+
+        @test  inbounds((1,), g)
+        @test  inbounds((3,), g)
+        @test  inbounds((5,), g)
+        # not on the axis
+        @test !inbounds((2,), g)
+        @test !inbounds((0,), g)
+        @test !inbounds((6,), g)
+    end
+
+    @testset "inbounds — MixedGrid" begin
+        g = Grid(
+            LinearAxis(range(0.0, 10.0; length = 200)),
+            LinearAxis(range(5.0, 20.0; length = 200)),
+            DiscreteAxis([0, 1])
+        )
+
+        # both components valid
+        @test  inbounds((3.7, 12.0, 0), g)
+        @test  inbounds((3.7, 12.0, 1), g)
+        # boundary continuous, valid discrete
+        @test  inbounds((0.0, 5.0, 0), g)
+        @test  inbounds((10.0, 20.0, 1), g)
+        # continuous out of range
+        @test !inbounds((-0.1, 12.0, 0), g)
+        @test !inbounds((10.1, 12.0, 1), g)
+        @test !inbounds((5.0, 4.9, 0),   g)
+        # discrete value not on axis
+        @test !inbounds((3.7, 12.0, 2), g)
+        # non-grid-coincident continuous is still in-bounds
+        @test  inbounds((0.001, 5.001, 0), g)
+        @test  (0.001, 5.001, 0) ∉ g
+    end
+
 end
