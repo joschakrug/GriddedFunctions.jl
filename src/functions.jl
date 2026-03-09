@@ -87,32 +87,39 @@ function Base.map!(f, gf::AbstractGriddedFunction)
 end
 
 """
-    argmap!(f, gf::AbstractGriddedFunction)
+    argmap!(f, gf::AbstractGriddedFunction; parallel = false)
 
-Apply function `f` to every element of `gf` in place.
+Apply function `f` to every element of `gf` in place. If `parallel = true`, use
+multiple threads to parallelise computation.
 
 Unlike `Base.map!`, `f` does _not_ take the existing value of `gf` at each point
 as its argument. Instead, it takes the grid value at each point of the grid (i.e.
 the function's 'x' value) as its argument.
 """
-function argmap!(f, gf::AbstractGriddedFunction)
+function argmap!(f, gf::AbstractGriddedFunction; parallel = false)
     g = grid(gf)
     v = fvalues(gf)
-    for I in eachindex(g)
-        v[I] = f(g[I])
+    if parallel
+        Threads.@threads for I in eachindex(g)
+            v[I] = f(g[I])
+        end
+    else
+        for I in eachindex(g)
+            v[I] = f(g[I])
+        end
     end
     gf
 end
 
 """
-    argmap(f, gf::AbstractGriddedFunction)
+    argmap(f, gf::AbstractGriddedFunction; parallel = false)
 
 Like [`argmap`](@ref) but generates a new gridded function over the same grid as
 `gf`.
 """
-function argmap(f, gf::AbstractGriddedFunction)
+function argmap(f, gf::AbstractGriddedFunction; parallel = false)
     gf_new = similar(gf)
-    argmap!(f, gf_new)
+    argmap!(f, gf_new, parallel = parallel)
 end
 
 """

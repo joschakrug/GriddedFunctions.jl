@@ -518,6 +518,40 @@ import Interpolations
         @test gfi(2.0) ≈ 4.0 atol=1e-2
     end
 
+    @testset "argmap / argmap!" begin
+        g  = Grid(LinearAxis(range(0.0, 1.0; length = 5)),
+                  DiscreteAxis([0, 1]))
+        f  = (x, z) -> x^2 + z
+
+        # argmap! (serial) — mutates in place and returns the same object
+        gf = GriddedFunction(Float64, g, undef)
+        result = argmap!(t -> t[1]^2 + t[2], gf)
+        @test result === gf
+        @test fvalues(gf)[1, 1] ≈ 0.0^2 + 0
+        @test fvalues(gf)[end, 1] ≈ 1.0^2 + 0
+        @test fvalues(gf)[1, 2] ≈ 0.0^2 + 1
+        @test fvalues(gf)[end, 2] ≈ 1.0^2 + 1
+
+        # argmap! (parallel) — same result as serial
+        gf_par = GriddedFunction(Float64, g, undef)
+        argmap!(t -> t[1]^2 + t[2], gf_par; parallel = true)
+        @test fvalues(gf_par) ≈ fvalues(gf)
+
+        # argmap (serial) — returns a new object, source unchanged
+        gf_src = GriddedFunction(Float64, g, (x, z) -> 0.0)
+        gf_new = argmap(t -> t[1]^2 + t[2], gf_src)
+        @test gf_new !== gf_src
+        @test fvalues(gf_new)[1, 1]   ≈ 0.0^2 + 0
+        @test fvalues(gf_new)[end, 1] ≈ 1.0^2 + 0
+        @test fvalues(gf_new)[1, 2]   ≈ 0.0^2 + 1
+        @test fvalues(gf_new)[end, 2] ≈ 1.0^2 + 1
+        @test all(fvalues(gf_src) .== 0.0)   # source not mutated
+
+        # argmap (parallel) — same result as serial
+        gf_par2 = argmap(t -> t[1]^2 + t[2], gf_src; parallel = true)
+        @test fvalues(gf_par2) ≈ fvalues(gf_new)
+    end
+
     @testset "inbounds" begin
         g = Grid(
             LinearAxis(range(0.0, 10.0; length = 200)),
