@@ -15,9 +15,11 @@ plot(gf2c)               # 3D surface
 plot(gf2c, seriestype=:heatmap)  # 2D heatmap
 
 struct Point; x::Float64; y::Float64; end
-Point(iter) = Point(iter...)
+GriddedFunctions.dimnames(::Type{Point}) = fieldnames(Point)
 Base.getindex(p::Point, i) = getfield(p, i)
 Base.convert(::Type{Point}, t::NTuple{2, Any}) = Point(t...)
 g = Grid(Point, LinearAxis(range(0.0,1.0;length=50)), LinearAxis(range(0.0,1.0;length=50)))
 gf = GriddedFunction(Float64, g, (x, y) -> x + y)
 plot(gf)  # x-label "x", y-label "y"
+
+plot(GriddedFunctionView(gf, y = gridaxes(GriddedFunctions.grid(gf), :y)[20]))
