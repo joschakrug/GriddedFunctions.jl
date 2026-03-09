@@ -228,67 +228,70 @@ import Interpolations
         @test maxpt == (10.0, 20.0, 1)
     end
 
-    @testset "GridView" begin
+    @testset "SubGrid" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))  # 0, 1, …, 10
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))  # 0, 1, 2, 3, 4
         disax  = DiscreteAxis([10, 20, 30])
         g = Grid(linax1, linax2, disax)
 
         # all-free view preserves dimensionality and size
-        gv_free = GridView(g, :, :, :)
-        @test ndims(gv_free) == 3
-        @test size(gv_free)  == (11, 5, 3)
+        sg_free = SubGrid(g, :, :, :)
+        @test ndims(sg_free) == 3
+        @test size(sg_free)  == (11, 5, 3)
 
         # fix discrete axis → 2-D view
-        gv = GridView(g, :, :, 10)
-        @test ndims(gv) == 2
-        @test size(gv)  == (11, 5)
-        @test GriddedFunctions.ncontinuousdims(typeof(gv)) == 2
+        sg = SubGrid(g, :, :, 10)
+        @test ndims(sg) == 2
+        @test size(sg)  == (11, 5)
+        @test GriddedFunctions.ncontinuousdims(typeof(sg)) == 2
         # indexing reconstructs the full point with the fixed discrete value embedded
-        @test gv[1, 1]     == (0.0,  0.0, 10)
-        @test gv[end, end] == (10.0, 4.0, 10)
-        @test gv[3, 2]     == (2.0,  1.0, 10)
+        @test sg[1, 1]     == (0.0,  0.0, 10)
+        @test sg[end, end] == (10.0, 4.0, 10)
+        @test sg[3, 2]     == (2.0,  1.0, 10)
 
         # fix second discrete value
-        gv_d2 = GridView(g, :, :, 30)
-        @test size(gv_d2) == (11, 5)
-        @test gv_d2[1, 1] == (0.0, 0.0, 30)
+        sg_d2 = SubGrid(g, :, :, 30)
+        @test size(sg_d2) == (11, 5)
+        @test sg_d2[1, 1] == (0.0, 0.0, 30)
 
         # fix one continuous axis → 2-D view (free axes: linax1 + disax)
-        gv2 = GridView(g, :, 2.0, :)
-        @test ndims(gv2) == 2
-        @test size(gv2)  == (11, 3)
-        @test gv2[1, 1]     == (0.0,  2.0, 10)
-        @test gv2[end, end] == (10.0, 2.0, 30)
+        sg2 = SubGrid(g, :, 2.0, :)
+        @test ndims(sg2) == 2
+        @test size(sg2)  == (11, 3)
+        @test sg2[1, 1]     == (0.0,  2.0, 10)
+        @test sg2[end, end] == (10.0, 2.0, 30)
 
         # restrict first continuous axis to a subrange → still 3-D, but smaller
-        gv3 = GridView(g, (2.0, 6.0), :, :)
-        @test ndims(gv3) == 3
-        @test size(gv3)  == (5, 5, 3)   # 2,3,4,5,6 → 5 points
-        @test gv3[1, 1, 1]       == (2.0,  0.0, 10)
-        @test gv3[end, end, end] == (6.0,  4.0, 30)
+        sg3 = SubGrid(g, (2.0, 6.0), :, :)
+        @test ndims(sg3) == 3
+        @test size(sg3)  == (5, 5, 3)   # 2,3,4,5,6 → 5 points
+        @test sg3[1, 1, 1]       == (2.0,  0.0, 10)
+        @test sg3[end, end, end] == (6.0,  4.0, 30)
 
         # out-of-bounds slice should throw
-        @test_throws Exception GridView(g, 1:20, :, :)
+        @test_throws Exception SubGrid(g, 1:20, :, :)
 
         # 1-D grid with SimpleType: restrict the single continuous axis
         g_simple = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
-        gv_s = GridView(g_simple, (1.0, 4.0))
-        @test ndims(gv_s) == 1
-        @test size(gv_s)  == (4,)
-        @test gv_s[1]   == SimpleType(1.0)
-        @test gv_s[end] == SimpleType(4.0)
+        sg_s = SubGrid(g_simple, (1.0, 4.0))
+        @test ndims(sg_s) == 1
+        @test size(sg_s)  == (4,)
+        @test sg_s[1]   == SimpleType(1.0)
+        @test sg_s[end] == SimpleType(4.0)
 
         # DoubleType: 1 continuous + 1 discrete, fix discrete → 1-D view
         g_double = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
-        gv_d = GridView(g_double, :, 3)
-        @test ndims(gv_d) == 1
-        @test size(gv_d)  == (11,)
-        @test gv_d[1]   == DoubleType(0.0,  3)
-        @test gv_d[end] == DoubleType(10.0, 3)
+        sg_d = SubGrid(g_double, :, 3)
+        @test ndims(sg_d) == 1
+        @test size(sg_d)  == (11,)
+        @test sg_d[1]   == DoubleType(0.0,  3)
+        @test sg_d[end] == DoubleType(10.0, 3)
+
+        # Base.view passes through to SubGrid
+        @test view(g, :, :, 10) == SubGrid(g, :, :, 10)
     end
 
-    @testset "GridView — named kwargs" begin
+    @testset "SubGrid — named kwargs" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))
         disax  = DiscreteAxis([10, 20, 30])
@@ -297,33 +300,36 @@ import Interpolations
         g = Grid(x = linax1, y = linax2, z = disax)
 
         # fix :z — should give a 2-D view
-        gv = GridView(g; z = 10)
-        @test ndims(gv) == 2
-        @test size(gv)  == (11, 5)
-        @test gv[1, 1]     == (x = 0.0,  y = 0.0, z = 10)
-        @test gv[end, end] == (x = 10.0, y = 4.0, z = 10)
+        sg = SubGrid(g; z = 10)
+        @test ndims(sg) == 2
+        @test size(sg)  == (11, 5)
+        @test sg[1, 1]     == (x = 0.0,  y = 0.0, z = 10)
+        @test sg[end, end] == (x = 10.0, y = 4.0, z = 10)
 
         # restrict :x, leave :y and :z free
-        gv2 = GridView(g; x = (2.0, 6.0))
-        @test ndims(gv2) == 3
-        @test size(gv2)  == (5, 5, 3)
-        @test gv2[1, 1, 1] == (x = 2.0, y = 0.0, z = 10)
+        sg2 = SubGrid(g; x = (2.0, 6.0))
+        @test ndims(sg2) == 3
+        @test size(sg2)  == (5, 5, 3)
+        @test sg2[1, 1, 1] == (x = 2.0, y = 0.0, z = 10)
 
         # kwargs in arbitrary order — same result
-        gv3 = GridView(g; z = 20, x = (0.0, 5.0))
-        @test ndims(gv3) == 2
-        @test gv3[1, 1] == (x = 0.0, y = 0.0, z = 20)
+        sg3 = SubGrid(g; z = 20, x = (0.0, 5.0))
+        @test ndims(sg3) == 2
+        @test sg3[1, 1] == (x = 0.0, y = 0.0, z = 20)
 
         # DoubleType grid
         g_d = Grid(DoubleType; x = linax1, y = disax)
-        gv_d = GridView(g_d; y = 20)
-        @test ndims(gv_d) == 1
-        @test size(gv_d)  == (11,)
-        @test gv_d[1]   == DoubleType(0.0,  20)
-        @test gv_d[end] == DoubleType(10.0, 20)
+        sg_d = SubGrid(g_d; y = 20)
+        @test ndims(sg_d) == 1
+        @test size(sg_d)  == (11,)
+        @test sg_d[1]   == DoubleType(0.0,  20)
+        @test sg_d[end] == DoubleType(10.0, 20)
+
+        # Base.view with kwargs passes through to SubGrid
+        @test view(g; z = 10) == SubGrid(g; z = 10)
     end
 
-    @testset "GriddedFunctionView" begin
+    @testset "SubGriddedFunction" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))
         disax  = DiscreteAxis([10, 20])
@@ -331,46 +337,49 @@ import Interpolations
         gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
 
         # fix discrete dim: values should be 2-D (singleton dim dropped)
-        gfv = GriddedFunctions.GriddedFunctionView(gf, :, :, 10)
-        @test ndims(values(gfv)) == 2
-        @test size(values(gfv))  == (11, 5)
-        @test values(gfv)[1, 1]     ≈  0.0 + 0.0 + 10
-        @test values(gfv)[end, end] ≈ 10.0 + 4.0 + 10
+        sgf = SubGriddedFunction(gf, :, :, 10)
+        @test ndims(values(sgf)) == 2
+        @test size(values(sgf))  == (11, 5)
+        @test values(sgf)[1, 1]     ≈  0.0 + 0.0 + 10
+        @test values(sgf)[end, end] ≈ 10.0 + 4.0 + 10
         # the grid of the view has matching reduced dimensionality
-        @test ndims(grid(gfv)) == 2
-        @test size(grid(gfv))  == (11, 5)
+        @test ndims(grid(sgf)) == 2
+        @test size(grid(sgf))  == (11, 5)
 
         # second discrete slice
-        gfv2 = GriddedFunctions.GriddedFunctionView(gf, :, :, 20)
-        @test ndims(values(gfv2)) == 2
-        @test values(gfv2)[1, 1] ≈ 0.0 + 0.0 + 20
+        sgf2 = SubGriddedFunction(gf, :, :, 20)
+        @test ndims(values(sgf2)) == 2
+        @test values(sgf2)[1, 1] ≈ 0.0 + 0.0 + 20
 
         # restrict (non-singleton) → values remain 3-D
-        gfv3 = GriddedFunctions.GriddedFunctionView(gf, (2.0, 6.0), :, :)
-        @test ndims(values(gfv3)) == 3
-        @test size(values(gfv3))  == (5, 5, 2)
-        @test values(gfv3)[1, 1, 1] ≈ 2.0 + 0.0 + 10
+        sgf3 = SubGriddedFunction(gf, (2.0, 6.0), :, :)
+        @test ndims(values(sgf3)) == 3
+        @test size(values(sgf3))  == (5, 5, 2)
+        @test values(sgf3)[1, 1, 1] ≈ 2.0 + 0.0 + 10
 
         # 1-D SimpleType grid: restrict the single axis
         g_simple  = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
         gf_simple = GriddedFunction(Float64, g_simple, x -> x^2)
-        gfv_s = GriddedFunctions.GriddedFunctionView(gf_simple, (1.0, 4.0))
-        @test ndims(values(gfv_s)) == 1
-        @test size(values(gfv_s))  == (4,)
-        @test values(gfv_s)[1]   ≈  1.0
-        @test values(gfv_s)[end] ≈ 16.0
+        sgf_s = SubGriddedFunction(gf_simple, (1.0, 4.0))
+        @test ndims(values(sgf_s)) == 1
+        @test size(values(sgf_s))  == (4,)
+        @test values(sgf_s)[1]   ≈  1.0
+        @test values(sgf_s)[end] ≈ 16.0
 
         # DoubleType: fix discrete → 1-D values
         g_double  = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
         gf_double = GriddedFunction(Float64, g_double, (x, y) -> x * y)
-        gfv_d = GriddedFunctions.GriddedFunctionView(gf_double, :, 3)
-        @test ndims(values(gfv_d)) == 1
-        @test size(values(gfv_d))  == (11,)
-        @test values(gfv_d)[1]   ≈  0.0 * 3
-        @test values(gfv_d)[end] ≈ 10.0 * 3
+        sgf_d = SubGriddedFunction(gf_double, :, 3)
+        @test ndims(values(sgf_d)) == 1
+        @test size(values(sgf_d))  == (11,)
+        @test values(sgf_d)[1]   ≈  0.0 * 3
+        @test values(sgf_d)[end] ≈ 10.0 * 3
+
+        # Base.view passes through to SubGriddedFunction
+        @test values(view(gf, :, :, 10)) == values(SubGriddedFunction(gf, :, :, 10))
     end
 
-    @testset "GriddedFunctionView — named kwargs" begin
+    @testset "SubGriddedFunction — named kwargs" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))
         disax  = DiscreteAxis([10, 20])
@@ -379,22 +388,25 @@ import Interpolations
         gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
 
         # fix :z — 2-D values
-        gfv = GriddedFunctions.GriddedFunctionView(gf; z = 10)
-        @test ndims(values(gfv)) == 2
-        @test size(values(gfv))  == (11, 5)
-        @test values(gfv)[1, 1]     ≈  0.0 + 0.0 + 10
-        @test values(gfv)[end, end] ≈ 10.0 + 4.0 + 10
+        sgf = SubGriddedFunction(gf; z = 10)
+        @test ndims(values(sgf)) == 2
+        @test size(values(sgf))  == (11, 5)
+        @test values(sgf)[1, 1]     ≈  0.0 + 0.0 + 10
+        @test values(sgf)[end, end] ≈ 10.0 + 4.0 + 10
 
         # restrict :x only — values remain 3-D
-        gfv2 = GriddedFunctions.GriddedFunctionView(gf; x = (2.0, 6.0))
-        @test ndims(values(gfv2)) == 3
-        @test size(values(gfv2))  == (5, 5, 2)
-        @test values(gfv2)[1, 1, 1] ≈ 2.0 + 0.0 + 10
+        sgf2 = SubGriddedFunction(gf; x = (2.0, 6.0))
+        @test ndims(values(sgf2)) == 3
+        @test size(values(sgf2))  == (5, 5, 2)
+        @test values(sgf2)[1, 1, 1] ≈ 2.0 + 0.0 + 10
 
         # kwargs in arbitrary order
-        gfv3 = GriddedFunctions.GriddedFunctionView(gf; z = 20, x = (0.0, 5.0))
-        @test ndims(values(gfv3)) == 2
-        @test values(gfv3)[1, 1] ≈ 0.0 + 0.0 + 20
+        sgf3 = SubGriddedFunction(gf; z = 20, x = (0.0, 5.0))
+        @test ndims(values(sgf3)) == 2
+        @test values(sgf3)[1, 1] ≈ 0.0 + 0.0 + 20
+
+        # Base.view with kwargs passes through to SubGriddedFunction
+        @test values(view(gf; z = 10)) == values(SubGriddedFunction(gf; z = 10))
     end
 
     @testset "Interpolation" begin
