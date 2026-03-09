@@ -81,6 +81,11 @@ end
 
 function SubGrid(g::AbstractGrid{T, DS}; kwargs...) where {T, DS}
     names = dimnames(T)
+
+    if (names === ()) || !all(k in names for k in keys(kwargs))
+        error("Trying to subset on dimension names that are not part of type $T")
+    end
+
     selectors = ntuple(d -> get(kwargs, names[d], :), Val(DS))
     SubGrid(g, selectors...)
 end
@@ -201,7 +206,7 @@ struct SubGriddedFunction{TY, D, GF, VV, GV} <: AbstractGriddedFunction{TY, D}
             d -> length(slices[d]) == 1 ? only(slices[d]) : slices[d],
             length(slices)
         )
-        vals = view(values(source), slices_fixed...)
+        vals = view(fvalues(source), slices_fixed...)
         sg = SubGrid(grid(source), slices...)
         new{eltype(GF), ndims(sg), GF, typeof(vals), typeof(sg)}(source, vals, sg)
     end
@@ -220,7 +225,7 @@ function SubGriddedFunction(source::AbstractGriddedFunction; kwargs...)
 end
 
 grid(sgf::SubGriddedFunction) = sgf.subgrid
-values(sgf::SubGriddedFunction) = sgf.values
+fvalues(sgf::SubGriddedFunction) = sgf.values
 gridtype(::Type{SubGriddedFunction{TY, D, GF, VV, GV}}) where {TY, D, GF, VV, GV} = GV
 
 Base.view(gf::GriddedFunction, args...) = SubGriddedFunction(gf, args...)

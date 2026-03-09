@@ -287,15 +287,17 @@ function Grid(axes::Vararg{Axis})
 end
 
 function Grid(T::Type; kwargs...)
+    if (dimnames(T) == ()) || (length(dimnames(T)) != length(kwargs))
+        error("Named dimensions of type $T do not correspond to grid axis specification.")
+    end
     names = dimnames(T)
     axes = ntuple(d -> kwargs[names[d]], Val(length(names)))
     Grid{T}(axes)
 end
 
 function Grid(; kwargs...)
-    names = keys(kwargs)
-    axes  = Tuple(Base.values(kwargs))
-    T     = NamedTuple{names, Tuple{map(eltype, axes)...}}
+    axes = Tuple(values(kwargs))
+    T = NamedTuple{keys(kwargs), Tuple{map(eltype, axes)...}}
     Grid{T}(axes)
 end
 

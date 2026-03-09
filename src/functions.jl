@@ -24,11 +24,11 @@ Return the grid over which `gf` is defined.
 function grid end
 
 """
-    values(gf::AbstractGriddedFunction)
+    fvalues(gf::AbstractGriddedFunction)
 
-Return the mutable array of values of `gf`.
+Return the mutable array of function values of `gf`.
 """
-function values end
+function fvalues end
 
 """
     gridtype(GF::Type{AbstractGriddedFunction})
@@ -40,11 +40,11 @@ function gridtype end
 Base.size(agf::AbstractGriddedFunction) = size(grid(agf))
 
 function Base.getindex(gf::AbstractGriddedFunction{TY, D}, I::Vararg{Int, D}) where {TY, D}
-    values(gf)[I...]
+    fvalues(gf)[I...]
 end
 
 function Base.setindex!(gf::AbstractGriddedFunction{TY, D}, v::TY, I::Vararg{Int, D}) where {TY, D}
-    values(gf)[I...] = v
+    fvalues(gf)[I...] = v
 end
 
 ncontinuousdims(::Type{GF}) where GF <: AbstractGriddedFunction = ncontinuousdims(gridtype(GF))
@@ -58,7 +58,7 @@ ndiscretedims(gf::AbstractGriddedFunction) = ndiscretedims(typeof(gf))
 A generator iterating over all points of `gf`, returning each point as a
 `Pair` of a grid point and its corresponding functoin value.
 """
-points(gf::AbstractGriddedFunction) = (x => y for (x, y) in zip(grid(gf), values(gf)))
+points(gf::AbstractGriddedFunction) = (x => y for (x, y) in zip(grid(gf), fvalues(gf)))
 
 """
     maxpoint(gf::AbstractGriddedFunction)
@@ -82,12 +82,12 @@ Apply scalar function `f` elementwise to every value of `gf` in place, mutating
 `gf` and returning it.
 """
 function Base.map!(f, gf::AbstractGriddedFunction)
-    map!(f, values(gf))
+    map!(f, fvalues(gf))
     gf
 end
 
 """
-    xmap!(f, gf::AbstractGriddedFunction)
+    argmap!(f, gf::AbstractGriddedFunction)
 
 Apply function `f` to every element of `gf` in place.
 
@@ -95,9 +95,9 @@ Unlike `Base.map!`, `f` does _not_ take the existing value of `gf` at each point
 as its argument. Instead, it takes the grid value at each point of the grid (i.e.
 the function's 'x' value) as its argument.
 """
-function xmap!(f, gf::AbstractGriddedFunction)
+function argmap!(f, gf::AbstractGriddedFunction)
     g = grid(gf)
-    v = values(gf)
+    v = fvalues(gf)
     for I in eachindex(g)
         v[I] = f(g[I])
     end
@@ -105,14 +105,14 @@ function xmap!(f, gf::AbstractGriddedFunction)
 end
 
 """
-    xmap(f, gf::AbstractGriddedFunction)
+    argmap(f, gf::AbstractGriddedFunction)
 
-Like [`xmap`](@ref) but generates a new gridded function over the same grid as
+Like [`argmap`](@ref) but generates a new gridded function over the same grid as
 `gf`.
 """
-function xmap(f, gf::AbstractGriddedFunction)
+function argmap(f, gf::AbstractGriddedFunction)
     gf_new = similar(gf)
-    xmap!(f, gf_new)
+    argmap!(f, gf_new)
 end
 
 """
@@ -164,7 +164,7 @@ function GriddedFunction(T::Type, g::Grid, u::UndefInitializer)
 end
 
 grid(gf::GriddedFunction) = gf.grid
-values(gf::GriddedFunction) = gf.values
+fvalues(gf::GriddedFunction) = gf.values
 gridtype(::Type{GriddedFunction{TY, D, G}}) where {TY, D, G} = G
 
 # - [ ] think about generalisation of all GriddedFunction methods that
@@ -193,44 +193,44 @@ points. All operations return a new `GriddedFunction` on the same grid.
 """
 function Base.:+(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
     @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) + values(gfb))
+    GriddedFunction(grid(gfa), fvalues(gfa) + fvalues(gfb))
 end
 
 function Base.:-(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
     @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) - values(gfb))
+    GriddedFunction(grid(gfa), fvalues(gfa) - fvalues(gfb))
 end
 
 function Base.:*(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
     @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) .* values(gfb))
+    GriddedFunction(grid(gfa), fvalues(gfa) .* fvalues(gfb))
 end
 
 function Base.:/(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
     @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), values(gfa) ./ values(gfb))
+    GriddedFunction(grid(gfa), fvalues(gfa) ./ fvalues(gfb))
 end
 
 function Base.:+(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) .+ c)
+    GriddedFunction(grid(gf), fvalues(gf) .+ c)
 end
 
 function Base.:-(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) .- c)
+    GriddedFunction(grid(gf), fvalues(gf) .- c)
 end
 
 function Base.:*(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) .* c)
+    GriddedFunction(grid(gf), fvalues(gf) .* c)
 end
 
 function Base.:/(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), values(gf) ./ c)
+    GriddedFunction(grid(gf), fvalues(gf) ./ c)
 end
 
 Base.:+(c::Real, gf::GriddedFunction) = gf + c
-Base.:-(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c .- values(gf))
+Base.:-(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c .- fvalues(gf))
 Base.:*(c::Real, gf::GriddedFunction) = gf * c
-Base.:/(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c ./ values(gf))
+Base.:/(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c ./ fvalues(gf))
 
 """
     map(f, gf::GriddedFunction)
@@ -247,7 +247,7 @@ map(x -> x^2,    gf)
 map(x -> 1/(1+x), gf)
 ```
 """
-Base.map(f, gf::GriddedFunction) = GriddedFunction(grid(gf), map(f, values(gf)))
+Base.map(f, gf::GriddedFunction) = GriddedFunction(grid(gf), map(f, fvalues(gf)))
 
 """
     log(gf)
@@ -295,7 +295,7 @@ struct GFInterpolation{GF <: AbstractGriddedFunction, DD, SITP}
 
         itps = map(discreteindices(grid(gf))) do I
             subgf = continuousview(gf, I)
-            itp = Interpolations.interpolate(values(subgf), interpmode)
+            itp = Interpolations.interpolate(fvalues(subgf), interpmode)
             Interpolations.scale(itp, map(range, gridaxes(grid(subgf))))
         end
 
