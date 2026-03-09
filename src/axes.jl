@@ -7,7 +7,7 @@ Each subtype of the abstract type `Axis{T}` needs to define at least the
 following methods:
 
 - `Base.length`
-- `Base.getindex`
+- `Base.getindex` (for integers as well as for unit ranges)
 - `Base.in`
 - [`find`](@ref)
 """
@@ -17,7 +17,7 @@ Base.eltype(::Type{Axis{T}}) where T = T
 Base.size(ax::A) where {A <: Axis} = (length(ax),)
 
 """
-    find(ax::Axis{T}, x::T) where T
+    find(x::T, ax::Axis{T}) where T
 
 Return the (integer) index of value `x` on axis `ax` and raise an error if `x`
 does not correspond to a point on `ax`.
@@ -61,6 +61,10 @@ for f in (:length, :getindex, :minimum, :maximum, :iterate)
     @eval Base.$f(lax::LinearAxis, args...) = Base.$f(range(lax), args...)
 end
 
+function Base.getindex(ax::LAX, rng::UnitRange{Int}) where {LAX <: LinearAxis}
+    LAX(range(ax[minimum(rng)], ax[maximum(rng)], length = length(rng)))
+end
+
 function Base.in(x::T, axis::LinearAxis{T}) where T
     x in range(axis)
 end
@@ -69,12 +73,17 @@ end
 #     (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
 # end
 
-function find(lax::LinearAxis{T}, x::T) where T
+"""
+    find(x::T, lax::LinearAxis{T})
+
+Return the index of `x` on `lax`. Uses an approximate equality check (`≈`);
+throws an `AssertionError` if no grid point matches.
+"""
+function find(x::T, lax::LinearAxis{T}) where T
     i = searchsortedlast(range(lax), x)
     @assert lax[i] ≈ x
     i
 end
-
 
 """
     DiscreteAxis{T} <: Axis{T}
@@ -104,10 +113,19 @@ end
 points(dax::DiscreteAxis) = dax.points
 
 Base.length(dax::DiscreteAxis) = length(points(dax))
+Base.getindex(dax::DiscreteAxis, rng::AbstractVector{Int}) = DiscreteAxis(points(dax)[rng])
 Base.getindex(dax::DiscreteAxis, i) = getindex(points(dax), i)
-Base.in(value, dax::DiscreteAxis) = in(value, points(dax))
+Base.minimum(ax::DiscreteAxis) = ax[1]
+Base.maximum(ax::DiscreteAxis) = ax[end]
+Base.in(x, dax::DiscreteAxis) = in(x, points(dax))
 
-function find(dax::DiscreteAxis{T}, x::T) where T
+"""
+    find(x::T, dax::DiscreteAxis{T})
+
+Return the index of `x` on `dax` using `searchsortedfirst`. Throws an error
+if `x` is outside the range of `dax`.
+"""
+function find(x::T, dax::DiscreteAxis{T}) where T
     pts = points(dax)
 
     if pts[1] <= x <= pts[end]
@@ -116,3 +134,23 @@ function find(dax::DiscreteAxis{T}, x::T) where T
         error("$x not on axis.")
     end
 end
+
+
+_parseselector(ax::Axis, ::Colon) = 1:length(ax)
+
+function _parseselector(ax::Axis{T}, rng::Tuple{T, T}) where T
+    min, max = rng
+    first, last = 0, length(ax)
+    for (i, x) in enumerate(ax)
+        (first == 0) && (x >= min) && (first = i)
+        (x <= max) && (last = i)
+    end
+    first:last
+end
+
+function _parseselector(ax::Axis{T}, x::T) where T
+    i = find(x, ax)
+    i:i
+end
+
+_parseselector(ax::Axis, s::Any) = error("$s is not a valid selector for axis $ax"); 0:0

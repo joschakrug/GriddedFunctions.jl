@@ -1,3 +1,4 @@
+using Revise
 using Test
 using GriddedFunctions
 import Interpolations
@@ -8,17 +9,16 @@ import Interpolations
         x::Float64
     end
 
-    # SimpleType(iter::Base.Generator) = SimpleType(iter...)
     Base.getindex(m::SimpleType, i) = i == 1 ? m.x : nothing
-    Base.iterate(m::SimpleType, s=1) = s > 1 ? nothing : (m.x, s + 1)
+    Base.convert(::Type{SimpleType}, t::T) where {T <: Tuple} = SimpleType(t...)
 
-    struct MyType
+    struct DoubleType
         x::Float64
         y::Int64
     end
 
-    MyType(iter) = MyType(iter...)
-    Base.getindex(m::MyType, i) = getfield(m, i)
+    Base.getindex(m::DoubleType, i) = getfield(m, i)
+    Base.convert(::Type{DoubleType}, t::T) where {T <: Tuple} = DoubleType(t...)
 
     @testset "LinearAxis" begin
         lax = LinearAxis(range(0.0, 10.0, length = 100))
@@ -61,16 +61,9 @@ import Interpolations
 
         # Grid factory returns the right subtypes
         mg = Grid(linax1, linax2, disax)
-        @test mg isa GriddedFunctions.MixedGrid
         @test size(mg) == (500, 500, 2)
-
-        cg = Grid(linax1, linax2)
-        @test cg isa GriddedFunctions.ContinuousGrid
-        @test size(cg) == (500, 500)
-
-        dg = Grid(disax)
-        @test dg isa GriddedFunctions.DiscreteGrid
-        @test size(dg) == (2,)
+        @test GriddedFunctions.ncontinuousdims(typeof(mg)) == 2
+        @test GriddedFunctions.ndiscretedims(mg) == 1
 
         # continuous axes must come before discrete axes
         @test_throws Exception Grid(disax, linax1)
@@ -80,16 +73,18 @@ import Interpolations
         @test mg[end, end, end] == (10.0, 20.0, 1)
     end
 
-    @testset "Grid construction with custom type" begin
-        g = Grid(MyType, LinearAxis(range(0., 10., length = 50)), DiscreteAxis([2, 3, 4]))
+    @testset "Grid construction with custom types" begin
+        g = Grid(DoubleType, LinearAxis(range(0., 10., length = 50)), DiscreteAxis([2, 3, 4]))
 
-        @test g[1, 1] == MyType(0., 2)
-        @test GriddedFunctions.finddiscrete(g, MyType(0.2, 3)) == 2
-        @test GriddedFunctions.find(g, MyType(0., 4)) == CartesianIndex(1, 3)
-        @test GriddedFunctions.decompose(g, MyType(0., 4)) == (tuple(0.), tuple(4))
+        @test g[1, 1] == DoubleType(0., 2)
+        @test GriddedFunctions.decompose(DoubleType(0., 4), g) == (tuple(0.), tuple(4))
+        @test GriddedFunctions.finddiscrete((3,), g) == CartesianIndex(2)
+        @test GriddedFunctions.find(DoubleType(0., 4), g) == CartesianIndex(1, 3)
+        
 
         g = Grid(SimpleType, LinearAxis(range(0., 10., length = 50)))
         @test g[1] == SimpleType(0.)
+        @test GriddedFunctions.discreteaxes(g) == ()
     end
 
     @testset "GriddedFunction — construction" begin
@@ -104,6 +99,7 @@ import Interpolations
         @test gf isa GriddedFunction
         @test size(gf) == (500, 500, 2)
         @test eltype(gf) == Float64
+        @test eltype(typeof(gf)) == Float64
 
         # values at corners
         @test gf[1, 1, 1] ≈ 0.0 * 5.0 * exp(0)      # (0, 5, 0)  → 0
@@ -199,6 +195,113 @@ import Interpolations
         @test maxpt == (10.0, 20.0, 1)
     end
 
+    @testset "GridView" begin
+        linax1 = LinearAxis(range(0.0, 10.0, length = 11))  # 0, 1, …, 10
+        linax2 = LinearAxis(range(0.0,  4.0, length =  5))  # 0, 1, 2, 3, 4
+        disax  = DiscreteAxis([10, 20, 30])
+        g = Grid(linax1, linax2, disax)
+
+        # all-free view preserves dimensionality and size
+        gv_free = GridView(g, :, :, :)
+        @test ndims(gv_free) == 3
+        @test size(gv_free)  == (11, 5, 3)
+
+        # fix discrete axis → 2-D view
+        gv = GridView(g, :, :, 10)
+        @test ndims(gv) == 2
+        @test size(gv)  == (11, 5)
+        @test GriddedFunctions.ncontinuousdims(typeof(gv)) == 2
+        # indexing reconstructs the full point with the fixed discrete value embedded
+        @test gv[1, 1]     == (0.0,  0.0, 10)
+        @test gv[end, end] == (10.0, 4.0, 10)
+        @test gv[3, 2]     == (2.0,  1.0, 10)
+
+        # fix second discrete value
+        gv_d2 = GridView(g, :, :, 30)
+        @test size(gv_d2) == (11, 5)
+        @test gv_d2[1, 1] == (0.0, 0.0, 30)
+
+        # fix one continuous axis → 2-D view (free axes: linax1 + disax)
+        gv2 = GridView(g, :, 2.0, :)
+        @test ndims(gv2) == 2
+        @test size(gv2)  == (11, 3)
+        @test gv2[1, 1]     == (0.0,  2.0, 10)
+        @test gv2[end, end] == (10.0, 2.0, 30)
+
+        # restrict first continuous axis to a subrange → still 3-D, but smaller
+        gv3 = GridView(g, (2.0, 6.0), :, :)
+        @test ndims(gv3) == 3
+        @test size(gv3)  == (5, 5, 3)   # 2,3,4,5,6 → 5 points
+        @test gv3[1, 1, 1]       == (2.0,  0.0, 10)
+        @test gv3[end, end, end] == (6.0,  4.0, 30)
+
+        # out-of-bounds slice should throw
+        @test_throws Exception GridView(g, 1:20, :, :)
+
+        # 1-D grid with SimpleType: restrict the single continuous axis
+        g_simple = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
+        gv_s = GridView(g_simple, (1.0, 4.0))
+        @test ndims(gv_s) == 1
+        @test size(gv_s)  == (4,)
+        @test gv_s[1]   == SimpleType(1.0)
+        @test gv_s[end] == SimpleType(4.0)
+
+        # DoubleType: 1 continuous + 1 discrete, fix discrete → 1-D view
+        g_double = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
+        gv_d = GridView(g_double, :, 3)
+        @test ndims(gv_d) == 1
+        @test size(gv_d)  == (11,)
+        @test gv_d[1]   == DoubleType(0.0,  3)
+        @test gv_d[end] == DoubleType(10.0, 3)
+    end
+
+    @testset "GriddedFunctionView" begin
+        linax1 = LinearAxis(range(0.0, 10.0, length = 11))
+        linax2 = LinearAxis(range(0.0,  4.0, length =  5))
+        disax  = DiscreteAxis([10, 20])
+        g  = Grid(linax1, linax2, disax)
+        gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
+
+        # fix discrete dim: values should be 2-D (singleton dim dropped)
+        gfv = GriddedFunctions.GriddedFunctionView(gf, :, :, 10)
+        @test ndims(values(gfv)) == 2
+        @test size(values(gfv))  == (11, 5)
+        @test values(gfv)[1, 1]     ≈  0.0 + 0.0 + 10
+        @test values(gfv)[end, end] ≈ 10.0 + 4.0 + 10
+        # the grid of the view has matching reduced dimensionality
+        @test ndims(grid(gfv)) == 2
+        @test size(grid(gfv))  == (11, 5)
+
+        # second discrete slice
+        gfv2 = GriddedFunctions.GriddedFunctionView(gf, :, :, 20)
+        @test ndims(values(gfv2)) == 2
+        @test values(gfv2)[1, 1] ≈ 0.0 + 0.0 + 20
+
+        # restrict (non-singleton) → values remain 3-D
+        gfv3 = GriddedFunctions.GriddedFunctionView(gf, (2.0, 6.0), :, :)
+        @test ndims(values(gfv3)) == 3
+        @test size(values(gfv3))  == (5, 5, 2)
+        @test values(gfv3)[1, 1, 1] ≈ 2.0 + 0.0 + 10
+
+        # 1-D SimpleType grid: restrict the single axis
+        g_simple  = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
+        gf_simple = GriddedFunction(Float64, g_simple, x -> x^2)
+        gfv_s = GriddedFunctions.GriddedFunctionView(gf_simple, (1.0, 4.0))
+        @test ndims(values(gfv_s)) == 1
+        @test size(values(gfv_s))  == (4,)
+        @test values(gfv_s)[1]   ≈  1.0
+        @test values(gfv_s)[end] ≈ 16.0
+
+        # DoubleType: fix discrete → 1-D values
+        g_double  = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
+        gf_double = GriddedFunction(Float64, g_double, (x, y) -> x * y)
+        gfv_d = GriddedFunctions.GriddedFunctionView(gf_double, :, 3)
+        @test ndims(values(gfv_d)) == 1
+        @test size(values(gfv_d))  == (11,)
+        @test values(gfv_d)[1]   ≈  0.0 * 3
+        @test values(gfv_d)[end] ≈ 10.0 * 3
+    end
+
     @testset "Interpolation" begin
         grid = Grid(
             LinearAxis(range(0.0, 10.0, length = 500)),
@@ -228,7 +331,7 @@ import Interpolations
         @test_throws Exception gfi(2.031, 11.007, 2)
     end
 
-    @testset "Interpolation — ContinuousGrid" begin
+    @testset "Interpolation — no discrete axes" begin
         grid = Grid(
             LinearAxis(range(0.0, 10.0, length = 200)),
             LinearAxis(range(0.0, 10.0, length = 200))
@@ -243,56 +346,27 @@ import Interpolations
         @test gfi(10.0, 10.0) ≈ 100.0
     end
 
-    @testset "Custom point type" begin
-        # Minimal custom point type replacing the default Tuple{Float64, Float64}.
-        # Must satisfy the Grid{T} interface:
-        #   - T(a, b)       positional constructor  (used by getindex)
-        #   - T(t::Tuple)   from-Tuple constructor  (used by the GFInterpolation callable)
-        #   - p[i]          component access        (used by Base.in, decompose, find)
-        #   - iterate/length                        (used for splatting in evaluate)
-        struct MyPoint
-            x::Float64
-            y::Float64
-        end
-
-        MyPoint(iter)                 = MyPoint(iter...)
-        Base.getindex(p::MyPoint, i)  = i == 1 ? p.x : p.y
-        Base.iterate(p::MyPoint, s=1) = s > 2 ? nothing : (p[s], s + 1)
-
+    @testset "Interpolation - custom type" begin
         g = Grid(
-            MyPoint,
+            DoubleType,
             LinearAxis(range(0.0, 5.0; length = 100)),
-            DiscreteAxis([0.0, 4.5, 5.0])
+            DiscreteAxis([0, 4, 5])
         )
 
-        # grid type and indexing
-        @test g isa GriddedFunctions.MixedGrid{MyPoint}
-        @test g[1, 1]     == MyPoint(0.0, 0.0)
-        @test g[end, end] == MyPoint(5.0, 5.0)
-
-        # membership (exercises p[d])
-        @test  g[1, 1]     in g      # corner points are always on the grid
-        @test  g[end, end] in g
-        @test  MyPoint(-1.0, 2.0) ∉ g   # x < 0 is outside the grid
-
-        # GriddedFunction construction and indexing
-        gf = GriddedFunction(Float64, g, (x, y) -> x + y)
-        @test gf isa GriddedFunction
-        @test gf[1, 1]     ≈ 0.0
-        @test gf[end, end] ≈ 10.0
+        gf  = GriddedFunction(Float64, g, (x, y) -> x + y)
 
         # Interpolation construction
         gfi = interpolate(gf)
         @test gfi isa GriddedFunctions.GFInterpolation
 
         # f(x, y) = x + y is linear, so BSpline(Linear()) is exact everywhere
-        @test gfi(0.0, 0.0) ≈ 0.0
-        @test gfi(5.0, 5.0) ≈ 10.0
-        @test gfi(0.5, 4.5) ≈ 5.0 atol=1e-10
+        @test gfi(0.0, 0) ≈ 0.0
+        @test gfi(5.0, 5) ≈ 10.0
+        @test gfi(0.5, 4) ≈ 4.5 atol=1e-10
 
         # evaluate with a MyPoint directly (exercises the TX dispatch path)
-        @test GriddedFunctions.evaluate(gfi, MyPoint(0.5, 4.5)) ≈ 5.0 atol=1e-10
-        @test gfi(MyPoint(0.5, 4.5)) ≈ 5.0 atol=1e-10
+        @test GriddedFunctions.evaluate(gfi, DoubleType(0.5, 4)) ≈ 4.5 atol=1e-10
+        @test gfi(DoubleType(0.5, 4)) ≈ 4.5 atol=1e-10
     end
 
     @testset "Custom singleton type" begin
@@ -303,7 +377,7 @@ import Interpolations
         )
 
         # grid type and indexing
-        @test g isa GriddedFunctions.ContinuousGrid{SimpleType}
+        @test g isa GriddedFunctions.Grid{SimpleType}
         @test g[1]      == SimpleType(0.0)
         @test g[end]    == SimpleType(5.0)
 
@@ -327,8 +401,8 @@ import Interpolations
         @test gfi(5.0) ≈ 25.0
         @test gfi(3.0) ≈ 9.0 atol=1e-2
 
-        @test GriddedFunctions.finddiscrete(g, SimpleType(5.0)) == CartesianIndex()
-        @test first(GriddedFunctions.decompose(g, SimpleType(5.0))) == (5.0,)
+        @test GriddedFunctions.finddiscrete((), g) == CartesianIndex()
+        @test first(GriddedFunctions.decompose(SimpleType(5.0), g)) == (5.0,)
         @test gfi.interpolations[CartesianIndex()](5.0) ≈ 25 atol=1e-2
 
         # evaluate with a SimpleType directly (exercises the TX dispatch path)
@@ -337,41 +411,7 @@ import Interpolations
         @test gfi(2.0) ≈ 4.0 atol=1e-2
     end
 
-    @testset "inbounds — ContinuousGrid" begin
-        g = Grid(
-            LinearAxis(range(0.0, 10.0; length = 100)),
-            LinearAxis(range(5.0, 20.0; length = 100))
-        )
-
-        # interior point
-        @test  inbounds((3.7, 12.0), g)
-        # boundary points are in-bounds
-        @test  inbounds((0.0, 5.0),  g)
-        @test  inbounds((10.0, 20.0), g)
-        # outside on first axis
-        @test !inbounds((-0.1, 10.0), g)
-        @test !inbounds((10.1, 10.0), g)
-        # outside on second axis
-        @test !inbounds((5.0, 4.9),  g)
-        @test !inbounds((5.0, 20.1), g)
-        # non-grid-coincident interior point is still in-bounds (unlike Base.in)
-        @test  inbounds((0.001, 5.001), g)
-        @test  (0.001, 5.001) ∉ g
-    end
-
-    @testset "inbounds — DiscreteGrid" begin
-        g = Grid(DiscreteAxis([1, 3, 5]))
-
-        @test  inbounds((1,), g)
-        @test  inbounds((3,), g)
-        @test  inbounds((5,), g)
-        # not on the axis
-        @test !inbounds((2,), g)
-        @test !inbounds((0,), g)
-        @test !inbounds((6,), g)
-    end
-
-    @testset "inbounds — MixedGrid" begin
+    @testset "inbounds" begin
         g = Grid(
             LinearAxis(range(0.0, 10.0; length = 200)),
             LinearAxis(range(5.0, 20.0; length = 200)),

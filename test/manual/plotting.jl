@@ -17,7 +17,7 @@ plot(gf2c, seriestype=:heatmap)  # 2D heatmap
 struct Point; x::Float64; y::Float64; end
 Point(iter) = Point(iter...)
 Base.getindex(p::Point, i) = getfield(p, i)
-Base.iterate(p::Point, s = 1) = s > 2 ? nothing : (p[s], s + 1)
+Base.convert(::Type{Point}, t::NTuple{2, Any}) = Point(t...)
 g = Grid(Point, LinearAxis(range(0.0,1.0;length=50)), LinearAxis(range(0.0,1.0;length=50)))
 gf = GriddedFunction(Float64, g, (x, y) -> x + y)
 plot(gf)  # x-label "x", y-label "y"
