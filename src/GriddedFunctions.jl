@@ -9,6 +9,7 @@ include("views.jl")
 
 export Axis, LinearAxis, DiscreteAxis, Grid, gridaxes, inbounds, grid
 export GridView, source
-export GriddedFunction, GFInterpolation, interpolate, xmap, xmap!, points, maxpoint
+export GriddedFunction, GriddedFunctionView, GFInterpolation
+export interpolate, xmap, xmap!, points, maxpoint
 
 end # module GriddedFunctions
