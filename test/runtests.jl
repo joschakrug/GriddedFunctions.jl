@@ -11,6 +11,7 @@ import Interpolations
 
     Base.getindex(m::SimpleType, i) = i == 1 ? m.x : nothing
     Base.convert(::Type{SimpleType}, t::T) where {T <: Tuple} = SimpleType(t...)
+    GriddedFunctions.dimnames(::Type{SimpleType}) = fieldnames(SimpleType)
 
     struct DoubleType
         x::Float64
@@ -19,6 +20,7 @@ import Interpolations
 
     Base.getindex(m::DoubleType, i) = getfield(m, i)
     Base.convert(::Type{DoubleType}, t::T) where {T <: Tuple} = DoubleType(t...)
+    GriddedFunctions.dimnames(::Type{DoubleType}) = fieldnames(DoubleType)
 
     @testset "LinearAxis" begin
         lax = LinearAxis(range(0.0, 10.0, length = 100))
@@ -71,6 +73,37 @@ import Interpolations
         # indexing a grid returns the coordinate tuple at that index
         @test mg[1, 1, 1] == (0.0, 5.0, 0)
         @test mg[end, end, end] == (10.0, 20.0, 1)
+    end
+
+   @testset "Grid construction — named kwargs" begin
+        linax = LinearAxis(range(0.0, 10.0, length = 11))
+        disax = DiscreteAxis([2, 3, 4])
+
+        # Grid(T; kwargs...) — axes reordered to match dimnames(T)
+        g = Grid(DoubleType; x = linax, y = disax)
+        @test g isa GriddedFunctions.Grid{DoubleType}
+        @test size(g) == (11, 3)
+        @test g[1, 1] == DoubleType(0.0, 2)
+        @test g[end, end] == DoubleType(10.0, 4)
+
+        # order of kwargs should not matter
+        g_rev = Grid(DoubleType; y = disax, x = linax)
+        @test g_rev[1, 1] == DoubleType(0.0, 2)
+        @test g_rev[end, end] == DoubleType(10.0, 4)
+
+        # single-axis type
+        g_simple = Grid(SimpleType; x = linax)
+        @test g_simple isa GriddedFunctions.Grid{SimpleType}
+        @test g_simple[1] == SimpleType(0.0)
+        @test g_simple[end] == SimpleType(10.0)
+
+        # Grid(; kwargs...) — defaults to NamedTuple element type
+        g_nt = Grid(x = linax, y = disax)
+        @test eltype(g_nt) == NamedTuple{(:x, :y), Tuple{Float64, Int64}}
+        @test size(g_nt) == (11, 3)
+        @test g_nt[1, 1]     == (x = 0.0,  y = 2)
+        @test g_nt[end, end] == (x = 10.0, y = 4)
+        @test GriddedFunctions.ncontinuousdims(typeof(g_nt)) == 1
     end
 
     @testset "Grid construction with custom types" begin
@@ -255,6 +288,41 @@ import Interpolations
         @test gv_d[end] == DoubleType(10.0, 3)
     end
 
+    @testset "GridView — named kwargs" begin
+        linax1 = LinearAxis(range(0.0, 10.0, length = 11))
+        linax2 = LinearAxis(range(0.0,  4.0, length =  5))
+        disax  = DiscreteAxis([10, 20, 30])
+
+        # NamedTuple grid via Grid(; kwargs...)
+        g = Grid(x = linax1, y = linax2, z = disax)
+
+        # fix :z — should give a 2-D view
+        gv = GridView(g; z = 10)
+        @test ndims(gv) == 2
+        @test size(gv)  == (11, 5)
+        @test gv[1, 1]     == (x = 0.0,  y = 0.0, z = 10)
+        @test gv[end, end] == (x = 10.0, y = 4.0, z = 10)
+
+        # restrict :x, leave :y and :z free
+        gv2 = GridView(g; x = (2.0, 6.0))
+        @test ndims(gv2) == 3
+        @test size(gv2)  == (5, 5, 3)
+        @test gv2[1, 1, 1] == (x = 2.0, y = 0.0, z = 10)
+
+        # kwargs in arbitrary order — same result
+        gv3 = GridView(g; z = 20, x = (0.0, 5.0))
+        @test ndims(gv3) == 2
+        @test gv3[1, 1] == (x = 0.0, y = 0.0, z = 20)
+
+        # DoubleType grid
+        g_d = Grid(DoubleType; x = linax1, y = disax)
+        gv_d = GridView(g_d; y = 20)
+        @test ndims(gv_d) == 1
+        @test size(gv_d)  == (11,)
+        @test gv_d[1]   == DoubleType(0.0,  20)
+        @test gv_d[end] == DoubleType(10.0, 20)
+    end
+
     @testset "GriddedFunctionView" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))
@@ -300,6 +368,33 @@ import Interpolations
         @test size(values(gfv_d))  == (11,)
         @test values(gfv_d)[1]   ≈  0.0 * 3
         @test values(gfv_d)[end] ≈ 10.0 * 3
+    end
+
+    @testset "GriddedFunctionView — named kwargs" begin
+        linax1 = LinearAxis(range(0.0, 10.0, length = 11))
+        linax2 = LinearAxis(range(0.0,  4.0, length =  5))
+        disax  = DiscreteAxis([10, 20])
+
+        g  = Grid(x = linax1, y = linax2, z = disax)
+        gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
+
+        # fix :z — 2-D values
+        gfv = GriddedFunctions.GriddedFunctionView(gf; z = 10)
+        @test ndims(values(gfv)) == 2
+        @test size(values(gfv))  == (11, 5)
+        @test values(gfv)[1, 1]     ≈  0.0 + 0.0 + 10
+        @test values(gfv)[end, end] ≈ 10.0 + 4.0 + 10
+
+        # restrict :x only — values remain 3-D
+        gfv2 = GriddedFunctions.GriddedFunctionView(gf; x = (2.0, 6.0))
+        @test ndims(values(gfv2)) == 3
+        @test size(values(gfv2))  == (5, 5, 2)
+        @test values(gfv2)[1, 1, 1] ≈ 2.0 + 0.0 + 10
+
+        # kwargs in arbitrary order
+        gfv3 = GriddedFunctions.GriddedFunctionView(gf; z = 20, x = (0.0, 5.0))
+        @test ndims(values(gfv3)) == 2
+        @test values(gfv3)[1, 1] ≈ 0.0 + 0.0 + 20
     end
 
     @testset "Interpolation" begin

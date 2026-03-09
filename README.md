@@ -4,8 +4,6 @@ This package provides tools to comfortably work with functions that cannot be de
 
 This is useful in particular when trying to solve dynamic problems via value function iteration.
 
-- [ ] TODO: Add functionality to define and access grid axes by name if grid type T has named fields (or is registered as a named type/a function axisnames(::Type{T}) is defined, which can easily be defined as axisnames(::Type{T}) = fieldnames(T) for types where it makes sense)
-
 ## A simple example
 
 Imagine you want to approximate a function of three variables, two of which live in a continuous range and one of which can only take a discrete set of values. Using the `GriddedFunctions.jl` package, you can easily set up such a function as follows:

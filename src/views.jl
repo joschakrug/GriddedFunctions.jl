@@ -13,7 +13,7 @@ its axes, yielding a `D`-dimensional view (`D ≤ DS`).
 
 `DC` is the number of continuous dimensions in the view.
 
-# Constructor
+# Constructors
 
     GridView(g::Grid{T, DS}, selectors...)
 
@@ -22,6 +22,14 @@ Pass one selector per axis of `g`:
 - `:` — keep the full axis unchanged (free)
 - `(lo, hi)` — restrict a [`ContinuousAxis`](@ref) to elements in `[lo, hi]` (free)
 - scalar — fix this axis to the given value (removes one dimension from the view)
+
+    GridView(g::Grid{T, DS}; name = selector, ...)
+
+Construct a view using named keyword selectors. Any axis not mentioned defaults
+to `:` (unrestricted). The axis names are resolved via [`dimnames`](@ref) on
+the point type `T`, so the keywords may be given in any order. Equivalent to
+calling the positional constructor with the selectors placed in the order
+defined by `dimnames(T)`.
 
 # Example
 
@@ -34,6 +42,12 @@ gv = GridView(g, :, :, 20)          # fix discrete axis → 2-D view
 gv[3, 2]                             # returns (0.2, 0.4, 20)
 
 gv2 = GridView(g, (0.0, 0.5), :, :) # restrict first axis, keep the rest
+
+# with named axes (T must have dimnames defined, e.g. a NamedTuple):
+g_named = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
+               y = LinearAxis(range(0.0, 2.0; length=6)),
+               z = DiscreteAxis([10, 20, 30]))
+gv3 = GridView(g_named; z = 20)     # fix :z, keep :x and :y free
 ```
 """
 struct GridView{T, D, DS, GS <: AbstractGrid{T, DS}, DC} <: AbstractGrid{T, D}
@@ -60,6 +74,12 @@ end
 function GridView(g::AbstractGrid{T, DS}, selectors::Vararg{Any, DS}) where {T, DS}
     slices = _parseselectors(g, selectors...)
     GridView(g, slices...)
+end
+
+function GridView(g::AbstractGrid{T, DS}; kwargs...) where {T, DS}
+    names = dimnames(T)
+    selectors = ntuple(d -> get(kwargs, names[d], :), Val(DS))
+    GridView(g, selectors...)
 end
 
 "Return tuple of index slices as unit ranges"
@@ -122,7 +142,7 @@ function gridaxes(g::GridView{T, D}) where {T, D}
     )
 end
 
-function gridaxes(g::GridView, d)
+function gridaxes(g::GridView, d::Int)
     ds = sourcedim(g, d)
     gridaxes(source(g), ds)[slices(g, sourcedim(g, d))]
 end
@@ -149,12 +169,18 @@ for grids. The underlying value array is a non-copying `SubArray`.
 Fixed axes (singleton slices) drop their dimension from both `values` and the
 grid, so the view appears as a lower-dimensional function.
 
-# Constructor
+# Constructors
 
     GriddedFunctionView(source, selectors...)
 
 Accepts the same selectors as [`GridView`](@ref). The view shares memory with
 `source`; mutating `values(view)` also mutates `values(source)`.
+
+    GriddedFunctionView(source; name = selector, ...)
+
+Keyword-selector variant. Any axis not mentioned defaults to `:` (unrestricted).
+Axis names are resolved via [`dimnames`](@ref) on the point type of the
+underlying grid (see [`GridView`](@ref) keyword constructor).
 """
 struct GriddedFunctionView{TY, D, GF, VV, GV} <: AbstractGriddedFunction{TY, D}
     source::GF
@@ -178,8 +204,13 @@ end
 function GriddedFunctionView(source::AbstractGriddedFunction, selectors::Vararg)
     gv = GridView(grid(source), selectors...)
     index_slices = slices(gv)
-    
+
     GriddedFunctionView(source, index_slices...)
+end
+
+function GriddedFunctionView(source::AbstractGriddedFunction; kwargs...)
+    gv = GridView(grid(source); kwargs...)
+    GriddedFunctionView(source, slices(gv)...)
 end
 
 grid(gfv::GriddedFunctionView) = gfv.gridview

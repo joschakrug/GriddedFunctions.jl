@@ -1,4 +1,26 @@
 """
+    dimnames(::Type{T}) where T
+
+Returns the names of the different dimensions as per data type `T`. Can be
+overloaded for any type `T` in order to support axis selection by name for
+any [`AbstractGrid{T}`](@ref) and its subtypes.
+
+Defaults to an empty tuple for all types that do not have dimension names
+specified. Defaults to the field names of `T` if `T` is a named tuple.
+"""
+dimnames(::Type{T}) where T <: Any = ()
+dimnames(::Type{T}) where T <: NamedTuple = fieldnames(T)
+dimnames(::Type{T}, d) where T = dimnames(T)[d]
+
+"""
+    dimnum(::Type{T}, name::Symbol) where T
+
+Return the number of dimension `name` in type `T`, as specified by
+[`dimnames`](@ref).
+"""
+dimnum(::Type{T}, name::Symbol) where T = findfirst(==(name), dimnames(T))
+
+"""
     AbstractGrid{T, D} <: AbstractArray{T, D}
 
 Abstract supertype for all grid types. A grid spanned by `D` axes where each
@@ -18,7 +40,9 @@ abstract type AbstractGrid{T, D} <: AbstractArray{T, D} end
     gridaxes(g::AbstractGrid, d = nothing)
 
 Return the tuple of axes spanning `g` (if `d = nothing`) or the `d`th axis of
-`g` (if `d` is specified).
+`g` (if `d` is specified). `d` can be either the number of the axis or, if
+the grid is based on a named type (see [`dimnames`](@ref)), the name of the
+respective axis.
 
 This method must be implemented by any concrete type implementing the
 [`AbstractGrid`](@ref) interface.]
@@ -26,7 +50,8 @@ This method must be implemented by any concrete type implementing the
 the concrete type of `g` is defined.
 """
 function gridaxes end
-gridaxes(g::AbstractGrid, d) = gridaxes(g)[d]
+gridaxes(g::AbstractGrid, d::Int) = gridaxes(g)[d]
+gridaxes(g::AbstractGrid{T}, d::Symbol) where T = gridaxes(g, dimnum(T, d))
 
 """
     topoint(t::NTuple{D}, g::AbstractGrid{T, D}) -> x::T
@@ -225,6 +250,20 @@ A custom point type `T` must support:
 Construct from any combination of [`LinearAxis`](@ref) and [`DiscreteAxis`](@ref).
 Without an explicit type argument `T` defaults to `Tuple{eltype(ax₁), eltype(ax₂), …}`.
 Throws an error if any discrete axis precedes a continuous axis.
+
+    Grid(T::Type; name = axis, ...)
+
+Construct from named keyword arguments. The axes are reordered to match
+`dimnames(T)`, so the keywords may be given in any order. Requires
+[`dimnames`](@ref) to be defined for `T`.
+
+    Grid(; name = axis, ...)
+
+Construct from named keyword arguments with no explicit point type. The axes
+are taken in the order the keywords are given and `T` defaults to
+`NamedTuple{names, Tuple{eltype(ax₁), …}}` where `names` are the keyword
+names. Points of the resulting grid are `NamedTuple`s whose fields match the
+axis names.
 """
 struct Grid{T, D, A <: NTuple{D, Axis}, DC} <: AbstractGrid{T, D}
     axes::A
@@ -244,6 +283,19 @@ end
 Grid(T::Type, axes::Vararg{Axis}) = Grid{T}(axes)
 function Grid(axes::Vararg{Axis})
     T = Tuple{map(eltype, axes)...}
+    Grid{T}(axes)
+end
+
+function Grid(T::Type; kwargs...)
+    names = dimnames(T)
+    axes = ntuple(d -> kwargs[names[d]], Val(length(names)))
+    Grid{T}(axes)
+end
+
+function Grid(; kwargs...)
+    names = keys(kwargs)
+    axes  = Tuple(Base.values(kwargs))
+    T     = NamedTuple{names, Tuple{map(eltype, axes)...}}
     Grid{T}(axes)
 end
 
