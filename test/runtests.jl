@@ -138,6 +138,25 @@ import Interpolations
         @test gf[1, 1, 1] ≈ 0.0 * 5.0 * exp(0)      # (0, 5, 0)  → 0
         @test gf[end, end, 1] ≈ 10.0 * 20.0 * exp(0)  # (10, 20, 0) → 200
         @test gf[end, end, 2] ≈ 10.0 * 20.0 * exp(1)  # (10, 20, 1) → 200e
+
+        # construction over a SubGrid (discrete axis fixed → 2-D)
+        sg = SubGrid(grid, :, :, 0)
+        gf_sg = GriddedFunction(Float64, sg, (x, y) -> x * y)
+        @test gf_sg isa GriddedFunction
+        @test size(gf_sg) == (500, 500)
+        @test eltype(gf_sg) == Float64
+        @test gf_sg[1, 1]     ≈ 0.0  * 5.0
+        @test gf_sg[end, end] ≈ 10.0 * 20.0
+
+        # undef constructor over SubGrid
+        gf_undef = GriddedFunction(Float64, sg, undef)
+        @test gf_undef isa GriddedFunction
+        @test size(gf_undef) == (500, 500)
+
+        # value-array constructor over SubGrid
+        vals = [x * y for x in range(0.0, 10.0; length=500), y in range(5.0, 20.0; length=500)]
+        gf_vals = GriddedFunction(sg, vals)
+        @test gf_vals[3, 7] ≈ gf_sg[3, 7]
     end
 
     @testset "GriddedFunction — arithmetic" begin
@@ -158,6 +177,30 @@ import Interpolations
         @test gfdiff[2, 3, 1] ≈ gf1[2, 3, 1] - gf2[2, 3, 1]
         @test gfprod[2, 3, 1] ≈ gf1[2, 3, 1] * gf2[2, 3, 1]
         @test gfdiv[2, 3, 1]  ≈ gf1[2, 3, 1] / gf2[2, 3, 1]
+
+        # arithmetic on GFs constructed over a SubGrid
+        sg = SubGrid(grid, :, :, 0)   # fix discrete axis → 2-D SubGrid
+        sg1 = GriddedFunction(Float64, sg, (x, y) -> x * y)
+        sg2 = GriddedFunction(Float64, sg, (x, y) -> x + y)
+
+        sgsum  = sg1 + sg2
+        sgdiff = sg1 - sg2
+        sgprod = sg1 * sg2
+        sgdiv  = sg1 / sg2
+
+        # results are regular GriddedFunctions over the same SubGrid
+        @test sgsum  isa GriddedFunction
+        @test GriddedFunctions.grid(sgsum) === sg
+
+        @test sgsum[2, 3]  ≈ sg1[2, 3] + sg2[2, 3]
+        @test sgdiff[2, 3] ≈ sg1[2, 3] - sg2[2, 3]
+        @test sgprod[2, 3] ≈ sg1[2, 3] * sg2[2, 3]
+        @test sgdiv[2, 3]  ≈ sg1[2, 3] / sg2[2, 3]
+
+        # scalar arithmetic
+        @test (sg1 + 1.0)[2, 3] ≈ sg1[2, 3] + 1.0
+        @test (sg1 * 3.0)[2, 3] ≈ sg1[2, 3] * 3.0
+        @test (2.0 - sg1)[2, 3] ≈ 2.0 - sg1[2, 3]
     end
 
     @testset "GriddedFunction — points" begin

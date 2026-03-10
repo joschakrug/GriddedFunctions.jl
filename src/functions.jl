@@ -1,4 +1,9 @@
 
+# - [ ] allow GriddedFunction to be defined on any AbstractGrid
+#       Make the defining feature of a SubGriddedFunction that it only
+#       references other GriddedFunctions _values_, not that it is defined
+#       over a subgrid
+
 # longer run to do: add a Domain (potentially linked to a GridSection type)
 # to allow for functions that are not defined over the entire grid
 
@@ -32,10 +37,21 @@ function fvalues end
 
 """
     gridtype(GF::Type{AbstractGriddedFunction})
+    gridtype(gf::GF)
 
 Return the type of the grid underlying the concrete gridded function type `GF`.
 """
 function gridtype end
+gridtype(gf::AbstractGriddedFunction) = gridtype(eltype(gf))
+
+"""
+    argtype(GF::Type{AbstractGriddedFunction})
+    argtype(gf::GF)
+
+Return the type of function arguments of `GF`
+"""
+argtype(GF::Type{T}) where T <: AbstractGriddedFunction = eltype(gridtype(GF))
+argtype(gf::AbstractGriddedFunction) = argtype(typeof(gf))
 
 Base.size(agf::AbstractGriddedFunction) = size(grid(agf))
 
@@ -131,33 +147,33 @@ point.
 
 # Constructors
 
-    GriddedFunction(g::Grid, values::Array)
+    GriddedFunction(g::AbstractGrid, values::Array)
 
 Construct from a pre-computed array of values. `size(values)` must match
-`size(g)`.
+`size(g)`. `g` may be a [`Grid`](@ref) or a [`SubGrid`](@ref).
 
-    GriddedFunction(T::Type, g::Grid, f::Function)
+    GriddedFunction(T::Type, g::AbstractGrid, f::Function)
 
 Construct by evaluating `f` at every grid point. `f` is called with the
 individual axis coordinates as separate arguments. The return type must be
-convertible to `T`.
+convertible to `T`. `g` may be a [`Grid`](@ref) or a [`SubGrid`](@ref).
 
-    GriddedFunction(T::Type, g::Grid, undef)
+    GriddedFunction(T::Type, g::AbstractGrid, undef)
 
 Construct an uninitialised `GriddedFunction` over `g` with element type `T`.
 """
-mutable struct GriddedFunction{TY, D, G <: Grid} <: AbstractGriddedFunction{TY, D}
+mutable struct GriddedFunction{TY, D, G <: AbstractGrid} <: AbstractGriddedFunction{TY, D}
     grid::G
     values::Array{TY}
 
-    function GriddedFunction(g::Grid, values)
+    function GriddedFunction(g::AbstractGrid, values)
         @assert size(g) == size(values)
         D = ndims(g)
         new{eltype(values), D, typeof(g)}(g, values)
     end
 end
 
-function GriddedFunction(T::Type, g::Grid, f::Function)
+function GriddedFunction(T::Type, g::AbstractGrid, f::Function)
     val = Array{T}(undef, size(g))
     for I in eachindex(val)
         val[I] = f(totuple(g[I], g)...)
@@ -165,7 +181,7 @@ function GriddedFunction(T::Type, g::Grid, f::Function)
     GriddedFunction(g, val)
 end
 
-function GriddedFunction(T::Type, g::Grid, u::UndefInitializer)
+function GriddedFunction(T::Type, g::AbstractGrid, u::UndefInitializer)
     val = Array{T}(u, size(g))
     GriddedFunction(g, val)
 end
@@ -173,10 +189,6 @@ end
 grid(gf::GriddedFunction) = gf.grid
 fvalues(gf::GriddedFunction) = gf.values
 gridtype(::Type{GriddedFunction{TY, D, G}}) where {TY, D, G} = G
-
-# - [ ] think about generalisation of all GriddedFunction methods that
-#       produce a _copy_ of the current GriddedFunction to an
-#       AbstractGriddedFunction (that may also be a view, for example)
 
 """
     Base.similar(gf::GriddedFunction)
@@ -193,54 +205,28 @@ Base.similar(gf::GriddedFunction{TY}) where TY = GriddedFunction(TY, grid(gf), u
     gfa / gfb
     gf + c  (and c + gf, gf - c, etc.)
 
-Elementwise arithmetic on [`GriddedFunction`](@ref) objects. Both operands
+Elementwise arithmetic on [`AbstractGriddedFunction`](@ref) objects. Both operands
 must be defined on the same grid object (checked with `===`). Mixed
 `GriddedFunction`/scalar operations broadcast the scalar across all grid
 points. All operations return a new `GriddedFunction` on the same grid.
 """
-function Base.:+(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), fvalues(gfa) + fvalues(gfb))
-end
+Base.:+(::GriddedFunction, ::GriddedFunction)
 
-function Base.:-(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), fvalues(gfa) - fvalues(gfb))
+for op in (:+, :-, :*, :/)
+    @eval begin
+        function Base.$op(gfa::AbstractGriddedFunction{TYA, D}, gfb::AbstractGriddedFunction{TYB, D}) where {TYA, TYB, D}
+            @assert grid(gfa) === grid(gfb)
+            GriddedFunction(grid(gfa), broadcast($op, fvalues(gfa), fvalues(gfb)))
+        end
+        Base.$op(gf::AbstractGriddedFunction, c::Real) =
+            GriddedFunction(grid(gf), broadcast($op, fvalues(gf), c))
+        Base.$op(c::Real, gf::AbstractGriddedFunction) =
+            GriddedFunction(grid(gf), broadcast($op, c, fvalues(gf)))
+    end
 end
-
-function Base.:*(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), fvalues(gfa) .* fvalues(gfb))
-end
-
-function Base.:/(gfa::GriddedFunction{TYA, D, G}, gfb::GriddedFunction{TYB, D, G}) where {TYA, TYB, D, G}
-    @assert grid(gfa) === grid(gfb)
-    GriddedFunction(grid(gfa), fvalues(gfa) ./ fvalues(gfb))
-end
-
-function Base.:+(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), fvalues(gf) .+ c)
-end
-
-function Base.:-(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), fvalues(gf) .- c)
-end
-
-function Base.:*(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), fvalues(gf) .* c)
-end
-
-function Base.:/(gf::GriddedFunction, c::Real)
-    GriddedFunction(grid(gf), fvalues(gf) ./ c)
-end
-
-Base.:+(c::Real, gf::GriddedFunction) = gf + c
-Base.:-(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c .- fvalues(gf))
-Base.:*(c::Real, gf::GriddedFunction) = gf * c
-Base.:/(c::Real, gf::GriddedFunction) = GriddedFunction(grid(gf), c ./ fvalues(gf))
 
 """
-    map(f, gf::GriddedFunction)
+    map(f, gf::AbstractGriddedFunction)
 
 Apply scalar function `f` elementwise to every value of `gf` and return a new
 `GriddedFunction` on the same grid.
@@ -254,7 +240,7 @@ map(x -> x^2,    gf)
 map(x -> 1/(1+x), gf)
 ```
 """
-Base.map(f, gf::GriddedFunction) = GriddedFunction(grid(gf), map(f, fvalues(gf)))
+Base.map(f, gf::AbstractGriddedFunction) = GriddedFunction(grid(gf), map(f, fvalues(gf)))
 
 """
     log(gf)
