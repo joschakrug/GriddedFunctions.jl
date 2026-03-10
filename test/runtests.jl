@@ -287,8 +287,8 @@ import Interpolations
         @test sg_d[1]   == DoubleType(0.0,  3)
         @test sg_d[end] == DoubleType(10.0, 3)
 
-        # Base.view passes through to SubGrid
-        @test view(g, :, :, 10) == SubGrid(g, :, :, 10)
+        # gfview passes through to SubGrid
+        @test gfview(g, :, :, 10) == SubGrid(g, :, :, 10)
     end
 
     @testset "SubGrid — named kwargs" begin
@@ -325,8 +325,8 @@ import Interpolations
         @test sg_d[1]   == DoubleType(0.0,  20)
         @test sg_d[end] == DoubleType(10.0, 20)
 
-        # Base.view with kwargs passes through to SubGrid
-        @test view(g; z = 10) == SubGrid(g; z = 10)
+        # gfview with kwargs passes through to SubGrid
+        @test gfview(g; z = 10) == SubGrid(g; z = 10)
     end
 
     @testset "SubGriddedFunction" begin
@@ -375,8 +375,8 @@ import Interpolations
         @test fvalues(sgf_d)[1]   ≈  0.0 * 3
         @test fvalues(sgf_d)[end] ≈ 10.0 * 3
 
-        # Base.view passes through to SubGriddedFunction
-        @test fvalues(view(gf, :, :, 10)) == fvalues(SubGriddedFunction(gf, :, :, 10))
+        # gfview passes through to SubGriddedFunction
+        @test fvalues(gfview(gf, :, :, 10)) == fvalues(SubGriddedFunction(gf, :, :, 10))
     end
 
     @testset "SubGriddedFunction — named kwargs" begin
@@ -405,8 +405,8 @@ import Interpolations
         @test ndims(fvalues(sgf3)) == 2
         @test fvalues(sgf3)[1, 1] ≈ 0.0 + 0.0 + 20
 
-        # Base.view with kwargs passes through to SubGriddedFunction
-        @test fvalues(view(gf; z = 10)) == fvalues(SubGriddedFunction(gf; z = 10))
+        # gfview with kwargs passes through to SubGriddedFunction
+        @test fvalues(gfview(gf; z = 10)) == fvalues(SubGriddedFunction(gf; z = 10))
     end
 
     @testset "Interpolation" begin

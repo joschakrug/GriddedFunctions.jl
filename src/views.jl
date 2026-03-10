@@ -49,8 +49,6 @@ g_named = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
                z = DiscreteAxis([10, 20, 30]))
 sg3 = SubGrid(g_named; z = 20)     # fix :z, keep :x and :y free
 
-# via Base.view:
-sg4 = view(g_named; z = 20)
 ```
 """
 struct SubGrid{T, D, DS, GS <: AbstractGrid{T, DS}, DC} <: AbstractGrid{T, D}
@@ -90,8 +88,37 @@ function SubGrid(g::AbstractGrid{T, DS}; kwargs...) where {T, DS}
     SubGrid(g, selectors...)
 end
 
-Base.view(g::Grid, args...) = SubGrid(g, args...)
-Base.view(g::Grid; kwargs...) = SubGrid(g; kwargs...)
+"""
+    gfview(g::Grid, selectors...)
+    gfview(g::Grid; name = selector, ...)
+
+Return a [`SubGrid`](@ref) view of `g`.
+
+Pass one selector per axis of `g`:
+
+- `:` — keep the full axis unchanged (free)
+- `(lo, hi)` — restrict a [`ContinuousAxis`](@ref) to elements in `[lo, hi]` (free)
+- scalar — fix this axis to the given value, dropping it from the view
+
+The keyword form accepts any subset of the named axes of `g` (requires
+[`dimnames`](@ref) to be defined for the element type of `g`). Any axis not
+mentioned defaults to `:` (unrestricted).
+
+# Examples
+
+```julia
+g = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
+         y = LinearAxis(range(0.0, 2.0; length=6)),
+         z = DiscreteAxis([10, 20, 30]))
+
+gfview(g, :, :, 20)          # fix :z → 2-D SubGrid
+gfview(g, (0.0, 0.5), :, :)  # restrict :x
+gfview(g; z = 20)             # fix :z by name
+gfview(g; z = 20, x = (0.0, 0.5))  # mixed, any order
+```
+"""
+gfview(g::Grid, args...) = SubGrid(g, args...)
+gfview(g::Grid; kwargs...) = SubGrid(g; kwargs...)
 
 "Return tuple of index slices as unit ranges"
 function _parseselectors(g::AbstractGrid{T, D}, selectors::Vararg{Any, D}) where {T, D}
@@ -228,8 +255,39 @@ grid(sgf::SubGriddedFunction) = sgf.subgrid
 fvalues(sgf::SubGriddedFunction) = sgf.values
 gridtype(::Type{SubGriddedFunction{TY, D, GF, VV, GV}}) where {TY, D, GF, VV, GV} = GV
 
-Base.view(gf::GriddedFunction, args...) = SubGriddedFunction(gf, args...)
-Base.view(gf::GriddedFunction; kwargs...) = SubGriddedFunction(gf; kwargs...)
+"""
+    gfview(gf::GriddedFunction, selectors...)
+    gfview(gf::GriddedFunction; name = selector, ...)
+
+Return a [`SubGriddedFunction`](@ref) view of `gf`. The view shares memory
+with `gf`; mutating its values also mutates `gf`.
+
+Pass one selector per axis of `gf`:
+
+- `:` — keep the full axis unchanged (free)
+- `(lo, hi)` — restrict a [`ContinuousAxis`](@ref) to elements in `[lo, hi]` (free)
+- scalar — fix this axis to the given value, dropping it from the view
+
+The keyword form accepts any subset of the named axes (requires
+[`dimnames`](@ref) to be defined for the element type of the underlying grid).
+Any axis not mentioned defaults to `:` (unrestricted).
+
+# Examples
+
+```julia
+g  = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
+          y = LinearAxis(range(0.0, 2.0; length=6)),
+          z = DiscreteAxis([10, 20, 30]))
+gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
+
+gfview(gf, :, :, 20)          # fix :z → 2-D SubGriddedFunction
+gfview(gf, (0.0, 0.5), :, :)  # restrict :x
+gfview(gf; z = 20)             # fix :z by name
+gfview(gf; z = 20, x = (0.0, 0.5))  # mixed, any order
+```
+"""
+gfview(gf::GriddedFunction, args...) = SubGriddedFunction(gf, args...)
+gfview(gf::GriddedFunction; kwargs...) = SubGriddedFunction(gf; kwargs...)
 
 """
     continuousview(source::AbstractGriddedFunction, I_disc::CartesianIndex)
