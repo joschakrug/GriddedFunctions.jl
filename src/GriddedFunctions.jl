@@ -10,6 +10,6 @@ include("views.jl")
 export Axis, LinearAxis, DiscreteAxis, AbstractGrid, Grid, gridaxes, inbounds
 export AbstractGriddedFunction, GriddedFunction, GFInterpolation
 export interpolate, argmap, argmap!, points, maxpoint, fvalues, grid
-export SubGrid, SubGriddedFunction, gfview
+export SubAxis, SubGrid, SubGriddedFunction, subset
 
 end # module GriddedFunctions

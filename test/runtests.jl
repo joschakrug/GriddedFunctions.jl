@@ -56,6 +56,52 @@ import Interpolations
         @test_throws Exception DiscreteAxis([2, 1])
     end
 
+    @testset "SubAxis" begin
+        lax = LinearAxis(range(0.0, 10.0, length = 11))   # 0, 1, …, 10
+        dax = DiscreteAxis([10, 20, 30])
+
+        # --- free SubAxis (full range) ---
+        sa_full = SubAxis(lax, :)
+        @test length(sa_full) == 11
+        @test sa_full[1]   == 0.0
+        @test sa_full[end] == 10.0
+
+        # find returns the local (1-based) index within the sub-axis
+        @test GriddedFunctions.find(0.0,  sa_full) == 1
+        @test GriddedFunctions.find(5.0,  sa_full) == 6
+        @test GriddedFunctions.find(10.0, sa_full) == 11
+        @test_throws Exception GriddedFunctions.find(0.5, sa_full)   # not a grid point
+
+        # --- free SubAxis (restricted range) ---
+        sa_rng = SubAxis(lax, 3:7)   # covers values 2, 3, 4, 5, 6
+        @test length(sa_rng) == 5
+        @test sa_rng[1]   == 2.0
+        @test sa_rng[end] == 6.0
+
+        # find returns position within the sub-axis (1 = first element of view)
+        @test GriddedFunctions.find(2.0, sa_rng) == 1
+        @test GriddedFunctions.find(5.0, sa_rng) == 4
+        @test GriddedFunctions.find(6.0, sa_rng) == 5
+        @test_throws Exception GriddedFunctions.find(1.0, sa_rng)   # below range
+        @test_throws Exception GriddedFunctions.find(7.0, sa_rng)   # above range
+
+        # --- fixed SubAxis ---
+        sa_fix = SubAxis(dax, 2)   # fixed at source index 2 → value 20
+        @test length(sa_fix)  == 1
+        @test sa_fix[1]       == 20
+        @test GriddedFunctions.isfixed(sa_fix)
+
+        # find on a fixed SubAxis: value must match the fixed element
+        @test GriddedFunctions.find(20, sa_fix) == 2   # returns source index
+        @test_throws Exception GriddedFunctions.find(10, sa_fix)
+
+        # --- out-of-bounds construction ---
+        @test_throws Exception SubAxis(lax, 0:5)    # first index < 1
+        @test_throws Exception SubAxis(lax, 5:20)   # last index > length
+        @test_throws Exception SubAxis(lax, 0)      # index < 1
+        @test_throws Exception SubAxis(lax, 12)     # index > length
+    end
+
     @testset "Grid construction" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 500))
         linax2 = LinearAxis(range(5.0, 20.0, length = 500))
@@ -140,7 +186,7 @@ import Interpolations
         @test gf[end, end, 2] ≈ 10.0 * 20.0 * exp(1)  # (10, 20, 1) → 200e
 
         # construction over a SubGrid (discrete axis fixed → 2-D)
-        sg = SubGrid(grid, :, :, 0)
+        sg = SubGrid(grid, :, :, 1)
         gf_sg = GriddedFunction(Float64, sg, (x, y) -> x * y)
         @test gf_sg isa GriddedFunction
         @test size(gf_sg) == (500, 500)
@@ -179,7 +225,7 @@ import Interpolations
         @test gfdiv[2, 3, 1]  ≈ gf1[2, 3, 1] / gf2[2, 3, 1]
 
         # arithmetic on GFs constructed over a SubGrid
-        sg = SubGrid(grid, :, :, 0)   # fix discrete axis → 2-D SubGrid
+        sg = SubGrid(grid, :, :, 1)   # fix discrete axis → 2-D SubGrid
         sg1 = GriddedFunction(Float64, sg, (x, y) -> x * y)
         sg2 = GriddedFunction(Float64, sg, (x, y) -> x + y)
 
@@ -278,12 +324,12 @@ import Interpolations
         g = Grid(linax1, linax2, disax)
 
         # all-free view preserves dimensionality and size
-        sg_free = SubGrid(g, :, :, :)
+        sg_free = subset(g, :, :, :)
         @test ndims(sg_free) == 3
         @test size(sg_free)  == (11, 5, 3)
 
         # fix discrete axis → 2-D view
-        sg = SubGrid(g, :, :, 10)
+        sg = subset(g, :, :, 10)
         @test ndims(sg) == 2
         @test size(sg)  == (11, 5)
         @test GriddedFunctions.ncontinuousdims(typeof(sg)) == 2
@@ -293,30 +339,36 @@ import Interpolations
         @test sg[3, 2]     == (2.0,  1.0, 10)
 
         # fix second discrete value
-        sg_d2 = SubGrid(g, :, :, 30)
+        sg_d2 = subset(g, :, :, 30)
         @test size(sg_d2) == (11, 5)
         @test sg_d2[1, 1] == (0.0, 0.0, 30)
 
         # fix one continuous axis → 2-D view (free axes: linax1 + disax)
-        sg2 = SubGrid(g, :, 2.0, :)
+        sg2 = subset(g, :, 2.0, :)
         @test ndims(sg2) == 2
         @test size(sg2)  == (11, 3)
         @test sg2[1, 1]     == (0.0,  2.0, 10)
         @test sg2[end, end] == (10.0, 2.0, 30)
 
-        # restrict first continuous axis to a subrange → still 3-D, but smaller
-        sg3 = SubGrid(g, (2.0, 6.0), :, :)
+        # restrict first continuous axis to an index range → still 3-D, but smaller
+        sg3 = SubGrid(g, 3:7, :, :)
         @test ndims(sg3) == 3
-        @test size(sg3)  == (5, 5, 3)   # 2,3,4,5,6 → 5 points
+        @test size(sg3)  == (5, 5, 3)   # indices 3..7 → values 2,3,4,5,6
         @test sg3[1, 1, 1]       == (2.0,  0.0, 10)
         @test sg3[end, end, end] == (6.0,  4.0, 30)
+
+        # singleton unit range retains the dimension as size-1 (not collapsed)
+        sg4 = SubGrid(g, 4:4, :, :)
+        @test ndims(sg4) == 3
+        @test size(sg4)  == (1, 5, 3)
+        @test sg4[1, 1, 1] == (3.0, 0.0, 10)
 
         # out-of-bounds slice should throw
         @test_throws Exception SubGrid(g, 1:20, :, :)
 
-        # 1-D grid with SimpleType: restrict the single continuous axis
+        # 1-D grid with SimpleType: restrict the single continuous axis by index range
         g_simple = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
-        sg_s = SubGrid(g_simple, (1.0, 4.0))
+        sg_s = SubGrid(g_simple, 2:5)   # indices 2..5 → values 1.0, 2.0, 3.0, 4.0
         @test ndims(sg_s) == 1
         @test size(sg_s)  == (4,)
         @test sg_s[1]   == SimpleType(1.0)
@@ -324,14 +376,12 @@ import Interpolations
 
         # DoubleType: 1 continuous + 1 discrete, fix discrete → 1-D view
         g_double = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
-        sg_d = SubGrid(g_double, :, 3)
+        sg_d = subset(g_double, :, 3)
         @test ndims(sg_d) == 1
         @test size(sg_d)  == (11,)
         @test sg_d[1]   == DoubleType(0.0,  3)
         @test sg_d[end] == DoubleType(10.0, 3)
 
-        # gfview passes through to SubGrid
-        @test gfview(g, :, :, 10) == SubGrid(g, :, :, 10)
     end
 
     @testset "SubGrid — named kwargs" begin
@@ -343,33 +393,31 @@ import Interpolations
         g = Grid(x = linax1, y = linax2, z = disax)
 
         # fix :z — should give a 2-D view
-        sg = SubGrid(g; z = 10)
+        sg = subset(g, z = 10)
         @test ndims(sg) == 2
         @test size(sg)  == (11, 5)
         @test sg[1, 1]     == (x = 0.0,  y = 0.0, z = 10)
         @test sg[end, end] == (x = 10.0, y = 4.0, z = 10)
 
-        # restrict :x, leave :y and :z free
-        sg2 = SubGrid(g; x = (2.0, 6.0))
+        # restrict :x by index range, leave :y and :z free
+        sg2 = subset(g, (2., 6.), :, :)
         @test ndims(sg2) == 3
         @test size(sg2)  == (5, 5, 3)
         @test sg2[1, 1, 1] == (x = 2.0, y = 0.0, z = 10)
 
         # kwargs in arbitrary order — same result
-        sg3 = SubGrid(g; z = 20, x = (0.0, 5.0))
+        sg3 = subset(g, z = 20, x = (0., 5.))
         @test ndims(sg3) == 2
         @test sg3[1, 1] == (x = 0.0, y = 0.0, z = 20)
 
         # DoubleType grid
-        g_d = Grid(DoubleType; x = linax1, y = disax)
-        sg_d = SubGrid(g_d; y = 20)
+        g_d = Grid(DoubleType, x = linax1, y = disax)
+        sg_d = subset(g_d, y = 20)
         @test ndims(sg_d) == 1
         @test size(sg_d)  == (11,)
         @test sg_d[1]   == DoubleType(0.0,  20)
         @test sg_d[end] == DoubleType(10.0, 20)
 
-        # gfview with kwargs passes through to SubGrid
-        @test gfview(g; z = 10) == SubGrid(g; z = 10)
     end
 
     @testset "SubGriddedFunction" begin
@@ -380,7 +428,7 @@ import Interpolations
         gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
 
         # fix discrete dim: values should be 2-D (singleton dim dropped)
-        sgf = SubGriddedFunction(gf, :, :, 10)
+        sgf = subset(gf, :, :, 10)
         @test ndims(fvalues(sgf)) == 2
         @test size(fvalues(sgf))  == (11, 5)
         @test fvalues(sgf)[1, 1]     ≈  0.0 + 0.0 + 10
@@ -390,20 +438,26 @@ import Interpolations
         @test size(grid(sgf))  == (11, 5)
 
         # second discrete slice
-        sgf2 = SubGriddedFunction(gf, :, :, 20)
+        sgf2 = subset(gf, :, :, 20)
         @test ndims(fvalues(sgf2)) == 2
         @test fvalues(sgf2)[1, 1] ≈ 0.0 + 0.0 + 20
 
-        # restrict (non-singleton) → values remain 3-D
-        sgf3 = SubGriddedFunction(gf, (2.0, 6.0), :, :)
+        # restrict by index range → values remain 3-D
+        sgf3 = SubGriddedFunction(gf, 3:7, :, :)
         @test ndims(fvalues(sgf3)) == 3
         @test size(fvalues(sgf3))  == (5, 5, 2)
         @test fvalues(sgf3)[1, 1, 1] ≈ 2.0 + 0.0 + 10
 
-        # 1-D SimpleType grid: restrict the single axis
+        # singleton unit range retains dimension as size-1 (not collapsed)
+        sgf4 = SubGriddedFunction(gf, 1:1, :, :)
+        @test ndims(fvalues(sgf4)) == 3
+        @test size(fvalues(sgf4))  == (1, 5, 2)
+        @test fvalues(sgf4)[1, 1, 1] ≈ 0.0 + 0.0 + 10
+
+        # 1-D SimpleType grid: restrict by index range
         g_simple  = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
         gf_simple = GriddedFunction(Float64, g_simple, x -> x^2)
-        sgf_s = SubGriddedFunction(gf_simple, (1.0, 4.0))
+        sgf_s = SubGriddedFunction(gf_simple, 2:5)   # indices 2..5 → values 1.0..4.0
         @test ndims(fvalues(sgf_s)) == 1
         @test size(fvalues(sgf_s))  == (4,)
         @test fvalues(sgf_s)[1]   ≈  1.0
@@ -412,14 +466,12 @@ import Interpolations
         # DoubleType: fix discrete → 1-D values
         g_double  = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
         gf_double = GriddedFunction(Float64, g_double, (x, y) -> x * y)
-        sgf_d = SubGriddedFunction(gf_double, :, 3)
+        sgf_d = subset(gf_double, :, 3)
         @test ndims(fvalues(sgf_d)) == 1
         @test size(fvalues(sgf_d))  == (11,)
         @test fvalues(sgf_d)[1]   ≈  0.0 * 3
         @test fvalues(sgf_d)[end] ≈ 10.0 * 3
 
-        # gfview passes through to SubGriddedFunction
-        @test fvalues(gfview(gf, :, :, 10)) == fvalues(SubGriddedFunction(gf, :, :, 10))
     end
 
     @testset "SubGriddedFunction — named kwargs" begin
@@ -431,25 +483,23 @@ import Interpolations
         gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
 
         # fix :z — 2-D values
-        sgf = SubGriddedFunction(gf; z = 10)
+        sgf = subset(gf, z = 10)
         @test ndims(fvalues(sgf)) == 2
         @test size(fvalues(sgf))  == (11, 5)
         @test fvalues(sgf)[1, 1]     ≈  0.0 + 0.0 + 10
         @test fvalues(sgf)[end, end] ≈ 10.0 + 4.0 + 10
 
-        # restrict :x only — values remain 3-D
-        sgf2 = SubGriddedFunction(gf; x = (2.0, 6.0))
+        # restrict :x by value range — values remain 3-D
+        sgf2 = subset(gf, x = (2., 6.))
         @test ndims(fvalues(sgf2)) == 3
         @test size(fvalues(sgf2))  == (5, 5, 2)
         @test fvalues(sgf2)[1, 1, 1] ≈ 2.0 + 0.0 + 10
 
         # kwargs in arbitrary order
-        sgf3 = SubGriddedFunction(gf; z = 20, x = (0.0, 5.0))
+        sgf3 = subset(gf; z = 20, x = (0., 5.))
         @test ndims(fvalues(sgf3)) == 2
         @test fvalues(sgf3)[1, 1] ≈ 0.0 + 0.0 + 20
 
-        # gfview with kwargs passes through to SubGriddedFunction
-        @test fvalues(gfview(gf; z = 10)) == fvalues(SubGriddedFunction(gf; z = 10))
     end
 
     @testset "Interpolation" begin

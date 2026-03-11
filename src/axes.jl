@@ -134,23 +134,3 @@ function find(x::T, dax::DiscreteAxis{T}) where T
         error("$x not on axis.")
     end
 end
-
-
-_parseselector(ax::Axis, ::Colon) = 1:length(ax)
-
-function _parseselector(ax::Axis{T}, rng::Tuple{T, T}) where T
-    min, max = rng
-    first, last = 0, length(ax)
-    for (i, x) in enumerate(ax)
-        (first == 0) && (x >= min) && (first = i)
-        (x <= max) && (last = i)
-    end
-    first:last
-end
-
-function _parseselector(ax::Axis{T}, x::T) where T
-    i = find(x, ax)
-    i:i
-end
-
-_parseselector(ax::Axis, s::Any) = error("$s is not a valid selector for axis $ax"); 0:0
