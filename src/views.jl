@@ -71,7 +71,7 @@ isfixed(sa::SubAxis) = isfixed(typeof(sa))
 
 Base.length(sa::SubAxis) = length(indices(sa))
 Base.getindex(sa::SubAxis, i::Int) = source(sa)[indices(sa)[i]]
-Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:SubAxis{T}}) where T =
+Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:SubAxis{<: AbstractUnitRange, T}}) where T =
     range(source(sa))[indices(sa)]
 Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:LinearAxis{T}}) where T =
     range(source(sa))[indices(sa)]
