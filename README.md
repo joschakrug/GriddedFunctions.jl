@@ -46,12 +46,29 @@ gfi(2.031, 11.007, 1)
 gfi(2.031, 11.007, 2)
 ```
 
-## Working with this package
+## Installation
 
-### Installation
+To install the latest stable version, add the [LocalJuliaRepo](https://github.com/joschakrug/LocalJuliaRepo) to your Julia registries by running
 
-So far, only a development version of this package is available. I recommend cloning this git repository to a local folder (say, `~/Packages/GriddedFunctions`) and add that folder to your main project as a development dependency running `] dev ~/Packages/GriddedFunctions` in the Julia REPL of your main project.
+```julia
+Pkg.Registry.add(RegistrySpec(url="git@github.com:joschakrug/LocalJuliaRepo.git"))
+```
+
+in your REPL. With this registry added, you can simply `] add` and `] updated` the `GriddedFunctions` package using your package manager.
+
+To install the latest development version, clone this git repository to a local folder and add that folder to your main project as a development dependency running `] dev local/repo/path`.
+
+## For developers
 
 ### Testing
 
-Testing is as simple as running `] test GriddedFunctions` with the `test` environment activated.
+Testing is as simple as running `] test GriddedFunctions` with the `test` environment activated. Manual tests in the `test/manual` folder require the `test` environment to be activated as well.
+
+### Pushing updated versions
+
+To push an updated package version to the `LocalJuliaRepo`, bump the version number in the `Project.toml`, push a tagged commit with the same version number to GitHub and then run
+
+```julia
+julia> using LocalRegistry
+julia> register("path/to/local/copy/of/project", registry = "LocalJuliaRepo", push = true)
+```
