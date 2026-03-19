@@ -7,6 +7,7 @@ include("grids.jl")
 include("functions.jl")
 include("views.jl")
 
+export approximately
 export Axis, LinearAxis, DiscreteAxis, AbstractGrid, Grid, gridaxes, inbounds
 export AbstractGriddedFunction, GriddedFunction, GFInterpolation
 export interpolate, argmap, argmap!, points, maxpoint, fvalues, grid

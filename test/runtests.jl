@@ -3,6 +3,8 @@ using Test
 using GriddedFunctions
 import Interpolations
 
+import GriddedFunctions: find
+
 @testset "GriddedFunctions" begin
 
     struct SimpleType
@@ -23,9 +25,9 @@ import Interpolations
     GriddedFunctions.dimnames(::Type{DoubleType}) = fieldnames(DoubleType)
 
     @testset "LinearAxis" begin
-        lax = LinearAxis(range(0.0, 10.0, length = 100))
+        lax = LinearAxis(range(0.0, 10.0, length = 101))
 
-        @test length(lax) == 100
+        @test length(lax) == 101
         @test minimum(lax) ≈ 0.0
         @test maximum(lax) ≈ 10.0
         @test lax[1] ≈ 0.0
@@ -36,8 +38,16 @@ import Interpolations
         @test -1.0 ∉ lax
         @test 11.0 ∉ lax
 
+        # finding
+        @test find(0.1, lax) == 2
+        @test_throws Exception find(0.14, lax)
+        @test find(approximately(0.14), lax) == 2
+        @test find(approximately(0.15), lax) == 2
+        @test find(approximately(0.151), lax) == 3
+        @test_throws Exception find(approximately(10.01), lax)
+
         # iteration matches the underlying range
-        @test collect(lax) ≈ collect(range(0.0, 10.0, length = 100))
+        @test collect(lax) ≈ collect(range(0.0, 10.0, length = 101))
     end
 
     @testset "DiscreteAxis" begin
@@ -51,6 +61,11 @@ import Interpolations
         @test 0 in dax
         @test 1 in dax
         @test 2 ∉ dax
+
+        # finding
+        @test find(1, dax) == 2
+        @test_throws Exception find(0.5, dax)
+        @test_throws Exception find(approximately(1), dax)
 
         # constructor requires sorted points
         @test_throws Exception DiscreteAxis([2, 1])
@@ -67,10 +82,13 @@ import Interpolations
         @test sa_full[end] == 10.0
 
         # find returns the local (1-based) index within the sub-axis
-        @test GriddedFunctions.find(0.0,  sa_full) == 1
-        @test GriddedFunctions.find(5.0,  sa_full) == 6
-        @test GriddedFunctions.find(10.0, sa_full) == 11
-        @test_throws Exception GriddedFunctions.find(0.5, sa_full)   # not a grid point
+        @test find(0.0,  sa_full) == 1
+        @test find(5.0,  sa_full) == 6
+        @test find(10.0, sa_full) == 11
+        @test_throws Exception find(0.5, sa_full)   # not a grid point
+        @test find(approximately(0.4), sa_full) == 1   # rounds to 0.0
+        @test find(approximately(0.51), sa_full) == 2   # rounds to 1.0
+        @test_throws Exception find(approximately(10.5), sa_full)   # out of bounds
 
         # --- free SubAxis (restricted range) ---
         sa_rng = SubAxis(lax, 3:7)   # covers values 2, 3, 4, 5, 6
@@ -79,11 +97,13 @@ import Interpolations
         @test sa_rng[end] == 6.0
 
         # find returns position within the sub-axis (1 = first element of view)
-        @test GriddedFunctions.find(2.0, sa_rng) == 1
-        @test GriddedFunctions.find(5.0, sa_rng) == 4
-        @test GriddedFunctions.find(6.0, sa_rng) == 5
-        @test_throws Exception GriddedFunctions.find(1.0, sa_rng)   # below range
-        @test_throws Exception GriddedFunctions.find(7.0, sa_rng)   # above range
+        @test find(2.0, sa_rng) == 1
+        @test find(5.0, sa_rng) == 4
+        @test find(6.0, sa_rng) == 5
+        @test_throws Exception find(1.0, sa_rng)   # below range
+        @test_throws Exception find(7.0, sa_rng)   # above range
+        @test find(approximately(2.4), sa_rng) == 1   # rounds to 2.0
+        @test find(approximately(2.5), sa_rng) == 2   # rounds to 3.0
 
         # --- fixed SubAxis ---
         sa_fix = SubAxis(dax, 2)   # fixed at source index 2 → value 20
@@ -92,8 +112,9 @@ import Interpolations
         @test GriddedFunctions.isfixed(sa_fix)
 
         # find on a fixed SubAxis: value must match the fixed element
-        @test GriddedFunctions.find(20, sa_fix) == 2   # returns source index
-        @test_throws Exception GriddedFunctions.find(10, sa_fix)
+        @test find(20, sa_fix) == 2   # returns source index
+        @test_throws Exception find(10, sa_fix)
+        @test_throws Exception find(approximately(20), sa_fix)   # inexact not supported for fixed
 
         # --- out-of-bounds construction ---
         @test_throws Exception SubAxis(lax, 0:5)    # first index < 1
@@ -158,12 +179,42 @@ import Interpolations
         @test g[1, 1] == DoubleType(0., 2)
         @test GriddedFunctions.decompose(DoubleType(0., 4), g) == (tuple(0.), tuple(4))
         @test GriddedFunctions.finddiscrete((3,), g) == CartesianIndex(2)
-        @test GriddedFunctions.find(DoubleType(0., 4), g) == CartesianIndex(1, 3)
+        @test find(DoubleType(0., 4), g) == CartesianIndex(1, 3)
         
 
         g = Grid(SimpleType, LinearAxis(range(0., 10., length = 50)))
         @test g[1] == SimpleType(0.)
         @test GriddedFunctions.discreteaxes(g) == ()
+    end
+
+    @testset "Grid — find" begin
+        linax1 = LinearAxis(range(0.0, 1.0, length = 11))   # 0.0, 0.1, …, 1.0
+        linax2 = LinearAxis(range(0.0, 2.0, length = 11))   # 0.0, 0.2, …, 2.0
+        disax  = DiscreteAxis([10, 20])
+
+        # purely continuous grid — exact and inexact
+        g = Grid(linax1, linax2)
+        @test find((0.3, 0.6), g) == CartesianIndex(4, 4)
+        @test find((0.0, 0.0), g) == CartesianIndex(1, 1)
+        @test find((1.0, 2.0), g) == CartesianIndex(11, 11)
+        @test_throws Exception find((0.35, 0.6), g)                              # 0.35 not on grid
+        @test find(approximately((0.34, 0.58)), g) == CartesianIndex(4, 4)       # both round to (0.3, 0.6)
+        @test find(approximately((0.36, 0.62)), g) == CartesianIndex(5, 4)       # 0.36→0.4, 0.62→0.6
+        @test_throws Exception find(approximately((1.1, 0.6)), g)                # out of bounds
+
+        # grid with a discrete axis
+        gd = Grid(linax1, disax)
+        @test find((0.3, 10), gd) == CartesianIndex(4, 1)
+        @test find((0.3, 20), gd) == CartesianIndex(4, 2)
+        @test_throws Exception find((0.35, 10), gd)                              # 0.35 not on continuous axis
+        @test_throws Exception find((0.3, 25), gd)                               # 25 outside discrete axis range
+        @test_throws Exception find(approximately((0.34, 10)), gd)               # discrete does not support inexact
+
+        # custom type
+        gc = Grid(DoubleType, linax1, disax)
+        @test find(DoubleType(0.3, 10), gc) == CartesianIndex(4, 1)
+        @test find(DoubleType(0.0, 20), gc) == CartesianIndex(1, 2)
+        @test_throws Exception find(DoubleType(0.35, 10), gc)
     end
 
     @testset "GriddedFunction — construction" begin
@@ -418,6 +469,38 @@ import Interpolations
         @test sg_d[1]   == DoubleType(0.0,  20)
         @test sg_d[end] == DoubleType(10.0, 20)
 
+    end
+
+    @testset "SubGrid — find" begin
+        linax1 = LinearAxis(range(0.0, 1.0, length = 11))   # 0.0, 0.1, …, 1.0
+        disax  = DiscreteAxis([10, 20])
+        g = Grid(linax1, disax)
+
+        # fix discrete axis → 1-D subgrid over continuous axis
+        sg = subset(g, :, 10)
+        @test find((0.3, 10), sg) == 4
+        @test find((0.0, 10), sg) == 1
+        @test find((1.0, 10), sg) == 11
+        @test_throws Exception find((0.35, 10), sg)                          # 0.35 not on grid
+        @test find(approximately((0.34, 10)), sg) == 4                       # rounds to 0.3
+        @test find(approximately((0.36, 10)), sg) == 5                       # rounds to 0.4
+        @test_throws Exception find(approximately((1.1, 10)), sg)            # out of bounds
+
+        # restricted range on continuous axis → 2-D subgrid (values 0.2…0.6 × {10,20})
+        sg2 = SubGrid(g, 3:7, :)
+        @test find((0.3, 10), sg2) == CartesianIndex(2, 1)    # 0.3 is local index 2, 10 is local index 1
+        @test find((0.5, 20), sg2) == CartesianIndex(4, 2)
+        @test_throws Exception find((0.1, 10), sg2)            # 0.1 outside restricted range
+        @test_throws Exception find((0.35, 10), sg2)           # 0.35 not on grid
+
+        # custom type — fix discrete → 1-D subgrid
+        gc = Grid(DoubleType, linax1, disax)
+        sgc = subset(gc, :, 10)
+        @test find(DoubleType(0.3, 10), sgc) == 4
+        @test find(DoubleType(0.0, 10), sgc) == 1
+        @test_throws Exception find(DoubleType(0.35, 10), sgc)
+        @test find(approximately(DoubleType(0.34, 10)), sgc) == 4            # rounds to 0.3
+        @test find(approximately(DoubleType(0.36, 10)), sgc) == 5            # rounds to 0.4
     end
 
     @testset "SubGriddedFunction" begin

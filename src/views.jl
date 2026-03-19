@@ -5,16 +5,18 @@ Type alias for the set of valid axis selectors:
 
 - `T` — a scalar value of axis element type `T`; fixes the axis to that value,
   collapsing it from the view.
+- `Approximator{T}` - an approximation wrapper around a scalar value of axis
+  element type `T`; fixes the axis to that value, collapsing it from the view
 - `Tuple{T, T}` — a `(from, to)` pair of axis values; restricts the axis to the
   corresponding index range (free dimension).
 - `Colon` (`:`) — keep the full axis unchanged (free dimension).
 """
-const Selector{T} = Union{T, Tuple{T, T}, Colon}
+const Selector{T} = Union{T, Tuple{T, T}, Colon, Approximator{T}}
 
 """
-    SubAxis{I, A} <: Axis{T}
+    SubAxis{I, T, A} <: Axis{T}
 
-A restricted or fixed view of a source `Axis{T}`.
+A restricted or fixed view of a source axis of type `A <: Axis{T}`.
 
 - When `I <: AbstractUnitRange{Int}`: a free sub-axis covering the given index range
   of the source axis. Even a singleton range (`i:i`) retains the dimension.
@@ -29,8 +31,8 @@ struct SubAxis{I <: Union{Int, AbstractUnitRange{Int}}, T, A <: Axis{T}} <: Axis
 end
 
 function SubAxis(source::A, ::Colon) where {T, A <: Axis{T}}
-    rng = 1:length(source)
-    SubAxis{typeof(rng), T, A}(source, 1:length(source))
+    I = typeof(1:length(source))
+    SubAxis{I, T, A}(source, 1:length(source))
 end
 
 function SubAxis(source::A, i::Int) where {T, A <: Axis{T}}
@@ -75,23 +77,30 @@ Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:SubAxis{<: AbstractUnitRange, T
     range(source(sa))[indices(sa)]
 Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:LinearAxis{T}}) where T =
     range(source(sa))[indices(sa)]
+Base.minimum(sa::SubAxis) = sa[1]
+Base.maximum(sa::SubAxis) = sa[end]
 
 function find(x::T, sa::SubAxis{Int, T}) where T
-    ionly = indices(sa)
-    (x == source(sa)[ionly]) ||error("$x not on $sa")
-    return ionly
+    i = only(indices(sa))
+    (x == source(sa)[i]) ? i : error("$x not on $sa")
 end
 
-function find(x::T, sa::SubAxis{AbstractUnitRange{Int}, T, LinearAxis}) where T
-    find(x, source(sa)) - first(indices(sa)) + 1
+function find(x::T, sa::SubAxis{<: AbstractUnitRange{Int}, T, <: LinearAxis{T}}) where T
+    i = find(x, source(sa)) - first(indices(sa)) + 1
+    (1 <= i <= length(sa)) || error("$x is not on $sa")
+    i
+end
+
+function find(
+        x::Approximator{T},
+        sa::SubAxis{<: AbstractUnitRange{Int}, T, <: LinearAxis{T}}
+    ) where T
+    minimum(sa) <= value(x) <= maximum(sa) || error("$x out of bounds of subaxis $sa")
+    find(approximately(value(x)), source(sa)) - first(indices(sa)) + 1
 end
 
 function find(x::T, sa::SubAxis{I, T}) where {I, T}
-    for (i, xi) in enumerate(source(sa)[indices(sa)])
-        (xi == x) && return i
-        (xi > x) && break
-    end
-    error("$x not on $sa")
+    searchsortedonly(source(sa)[indices(sa)], x)
 end
 
 """
@@ -378,7 +387,7 @@ Return a [`SubAxis`](@ref) of `ax` for the given [`Selector`](@ref):
 - `x::T` — fix the axis to the single source index of value `x` (collapsed)
 """
 subset(ax::Axis, ::Colon) = SubAxis(ax, :)
-subset(ax::Axis{T}, x::T) where T = SubAxis(ax, find(x, ax))
+subset(ax::Axis{T}, x::Union{T, Approximator{T}}) where T = SubAxis(ax, find(x, ax))
 function subset(ax::Axis{T}, fromto::Tuple{T, T}) where T
     from, to = fromto
     ifrom, ito = 0, length(ax)
@@ -414,6 +423,7 @@ g = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
 
 subset(g, :, :, 20)          # fix :z → 2-D SubGrid
 subset(g, (0.2, 0.8), :, :)  # restrict :x by value range
+subset(g, x = approximately(0.51)) # restrict :x to value closest to 0.51
 subset(g; z = 20)             # fix :z by name
 subset(g; z = 20, x = (0.2, 0.8))  # mixed, any order
 ```

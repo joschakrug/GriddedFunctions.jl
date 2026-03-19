@@ -98,8 +98,12 @@ ndiscretedims(g::AbstractGrid) = ndiscretedims(typeof(g))
 """
     find(g::AbstractGrid{T, D}, x::T) where {T, D}
 
-Find the exact index of point `x` on grid `g`. Throw an error if it is not
-on the grid.
+Find the index of point `x` on grid `g`.
+
+If `x` is wrapped in
+[`approximately`](@ref), inexact values along continuous dimensions will be
+tolerated and the index of the closest value on the respective axes will be
+returned. Otherwise, throw an error if `x` is not exactly on the grid.
 
 Returns the CartesianIndex of `x` on the grid if `D > 1` and an integer
 index if `D = 1`.
@@ -113,9 +117,23 @@ function find(x::T, g::AbstractGrid{T, D}) where {T, D}
     )
 end
 
-function find(g::AbstractGrid{T, 1}, x::T) where T
+function find(x::Approximator{T}, g::AbstractGrid{T, D}) where {T, D}
+    t = totuple(value(x), g)
+    CartesianIndex(
+        ntuple(
+            d -> find(approximately(t[d]), gridaxes(g, d)), Val(D)
+        )
+    )
+end
+
+function find(x::T, g::AbstractGrid{T, 1}) where T
     t = totuple(x, g)
     find(only(t), only(gridaxes(g)))
+end
+
+function find(x::Approximator{T}, g::AbstractGrid{T, 1}) where T
+    t = totuple(value(x), g)
+    find(approximately(only(t)), only(gridaxes(g)))
 end
 
 function Base.getindex(g::AbstractGrid{T, D}, I::Vararg{Int, D}) where {T, D}
@@ -309,11 +327,20 @@ ncontinuousdims(::Type{Grid{T, D, A, DC}}) where {T, D, A, DC} = DC
 """
     Base.in(x::T, g::Grid{T, D})
 
-Return `true` if `x` is an exact grid point of `g`, i.e. every component of
-`x` lies on its corresponding axis. For continuous axes this requires an exact
-match (see [`inbounds`](@ref) for range-only checking).
+Return `true` if `x` is a point on grid `g`, i.e. every component of
+`x` lies on its corresponding axis.
+
+If `x` is wrapped in
+[`approximately`](@ref), inexact values along continuous dimensions will be
+tolerated and the index of the closest value on the respective axes will be
+returned. Otherwise, return false if `x` is not exactly on the grid.
 """
 function Base.in(x::T, g::Grid{T, D}) where {T, D}
     t = totuple(x, g)
     all(t[d] in gridaxes(g, d) for d in 1:D)
+end
+
+function Base.in(x::Approximator{T}, g::Grid{T, D}) where {T, D}
+    t = totuple(T(x), g)
+    all(approximately(t[d]) in gridaxes(g, d) for d in 1:D)
 end

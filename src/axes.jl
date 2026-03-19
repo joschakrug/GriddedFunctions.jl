@@ -1,4 +1,42 @@
 """
+    Approximator{T}
+
+A wrapper around type `T` to allow for different dispatching depending on
+whether a value should be matched exactly or whether the nearest neighbouring
+value on a grid or axis should be matched.
+
+Do not construct directly, instead, use [`approximately`](@ref).
+"""
+struct Approximator{T}
+    x::T
+end
+
+(::Type{T})(x::Approximator{T}) where T = x.x
+Base.convert(::Type{T}, x::Approximator{T}) where T = T(x)
+
+"""
+    approximately(x::T) where T
+
+Create an approximation wrapper around `x`.
+
+Typically used when subsetting axis values where one does not want to match
+on the exact value of `x` but on the value next to `x` on an axis.
+
+# Examples
+
+```julia
+ax = LinearAxis(range(0., 10., 11))
+find(5.01, ax)   # error: only 5.0 is on axis
+find(approximately(5.01), ax)   # returns index 6
+```
+"""
+approximately(x::T) where T = Approximator{T}(x)
+
+"Return the wrapped value of an [`Approximator`](@ref)."
+value(x::Approximator) = x.x
+
+
+"""
     Axis{T} <: AbstractVector{T}
 
 A grid axis with axis element type `T`.
@@ -19,8 +57,11 @@ Base.size(ax::A) where {A <: Axis} = (length(ax),)
 """
     find(x::T, ax::Axis{T}) where T
 
-Return the (integer) index of value `x` on axis `ax` and raise an error if `x`
-does not correspond to a point on `ax`.
+Return the (integer) index of value `x` on axis `ax`.
+
+If `x` is wrapped in [`approximately`](@ref), tolerate inexact matches: As long
+as `x` is within the bounds of `ax`, return the index of the value closest to
+`x` on the axis. Otherwise, throw an error.
 """
 function find end
 
@@ -69,20 +110,23 @@ function Base.in(x::T, axis::LinearAxis{T}) where T
     x in range(axis)
 end
 
-# function _bestguessindex(lax::LinearAxis{T}, x::T) where T
-#     (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
-# end
+function Base.in(x::Approximator{T}, axis::LinearAxis{T}) where T
+    minimum(axis) <= T(x) <= maximum(axis)
+end
 
-"""
-    find(x::T, lax::LinearAxis{T})
+function _bestguessindex(x::T, lax::LinearAxis{T}) where T
+    (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
+end
 
-Return the index of `x` on `lax`. Uses an approximate equality check (`≈`);
-throws an `AssertionError` if no grid point matches.
-"""
 function find(x::T, lax::LinearAxis{T}) where T
-    i = searchsortedlast(range(lax), x)
-    @assert lax[i] ≈ x
-    i
+    i = round(Int, _bestguessindex(x, lax))
+    isapprox(lax[i], x) ? i : error("$x is not on $lax")
+end
+
+function find(x::Approximator{T}, lax::LinearAxis{T}) where T
+    bestguess = _bestguessindex(value(x), lax)
+    1 <= bestguess <= length(lax) || error("$x is outside the bounds of $lax")
+    round(Int, bestguess)
 end
 
 """
@@ -117,20 +161,17 @@ Base.getindex(dax::DiscreteAxis, rng::AbstractVector{Int}) = DiscreteAxis(points
 Base.getindex(dax::DiscreteAxis, i) = getindex(points(dax), i)
 Base.minimum(ax::DiscreteAxis) = ax[1]
 Base.maximum(ax::DiscreteAxis) = ax[end]
-Base.in(x, dax::DiscreteAxis) = in(x, points(dax))
+Base.in(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T = in(x, points(dax))
 
-"""
-    find(x::T, dax::DiscreteAxis{T})
+function find(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T
+    searchsortedonly(points(dax), x)
+end
 
-Return the index of `x` on `dax` using `searchsortedfirst`. Throws an error
-if `x` is outside the range of `dax`.
-"""
-function find(x::T, dax::DiscreteAxis{T}) where T
-    pts = points(dax)
-
-    if pts[1] <= x <= pts[end]
-        searchsortedfirst(pts, x)
-    else
-        error("$x not on axis.")
+"Return first occurence of item in collection, error if not available."
+function searchsortedonly(collection, item)
+    for (index, curitem) in enumerate(collection)
+        (curitem == item) && return index
+        (curitem > item) && break
     end
+    error("$x not on $sa")
 end
