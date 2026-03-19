@@ -1,9 +1,3 @@
-
-# - [ ] allow GriddedFunction to be defined on any AbstractGrid
-#       Make the defining feature of a SubGriddedFunction that it only
-#       references other GriddedFunctions _values_, not that it is defined
-#       over a subgrid
-
 # longer run to do: add a Domain (potentially linked to a GridSection type)
 # to allow for functions that are not defined over the entire grid
 

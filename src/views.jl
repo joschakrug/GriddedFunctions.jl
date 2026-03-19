@@ -14,7 +14,7 @@ Type alias for the set of valid axis selectors:
 const Selector{T} = Union{T, Tuple{T, T}, Colon, Approximator{T}}
 
 """
-    SubAxis{I, T, A} <: Axis{T}
+    SubAxis{T, I, A} <: Axis{T}
 
 A restricted or fixed view of a source axis of type `A <: Axis{T}`.
 
@@ -25,26 +25,31 @@ A restricted or fixed view of a source axis of type `A <: Axis{T}`.
 
 Construct via [`subset`](@ref) on an axis rather than directly.
 """
-struct SubAxis{I <: Union{Int, AbstractUnitRange{Int}}, T, A <: Axis{T}} <: Axis{T}
+struct SubAxis{T, I <: Union{Int, AbstractUnitRange{Int}}, A <: Axis{T}} <: Axis{T}
     source::A
     indices::I
 end
 
+function Base.show(io::IO, ::Type{SubAxis{T, I, A}}) where {T, I, A}
+    compact = get(io, :compact, false)
+    print(io, "SubAxis{", T, compact ? "$I, $A}" : "}")
+end
+
 function SubAxis(source::A, ::Colon) where {T, A <: Axis{T}}
     I = typeof(1:length(source))
-    SubAxis{I, T, A}(source, 1:length(source))
+    SubAxis{T, I, A}(source, 1:length(source))
 end
 
 function SubAxis(source::A, i::Int) where {T, A <: Axis{T}}
     (1 <= i <= length(source)) ||
         error("$source does not have index $i")
-    SubAxis{Int, T, A}(source, i)
+    SubAxis{T, Int, A}(source, i)
 end
 
 function SubAxis(source::A, r::AbstractUnitRange{Int}) where {T, A <: Axis{T}}
     (first(r) >= 1 && last(r) <= length(source)) ||
         error("Index range $r out of bounds for axis of length $(length(source))")
-    SubAxis{typeof(r), T, A}(source, r)
+    SubAxis{T, typeof(r), A}(source, r)
 end
 
 "Return the source axis underlying `sa`."
@@ -65,7 +70,7 @@ subindex(sa::SubAxis, i::Int) = searchsortedfirst(indices(sa), i)
 
 True if subaxis type `SA` implies that the axis is fixed to a scalar value.
 """
-isfixed(::Type{<:SubAxis{Int}}) = true
+isfixed(::Type{<:SubAxis{<:Any, Int}}) = true
 isfixed(::Type{<:SubAxis}) = false
 isfixed(sa::SubAxis) = isfixed(typeof(sa))
 
@@ -73,19 +78,19 @@ isfixed(sa::SubAxis) = isfixed(typeof(sa))
 
 Base.length(sa::SubAxis) = length(indices(sa))
 Base.getindex(sa::SubAxis, i::Int) = source(sa)[indices(sa)[i]]
-Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:SubAxis{<: AbstractUnitRange, T}}) where T =
+Base.range(sa::SubAxis{T, <:AbstractUnitRange, <:SubAxis{T, <:AbstractUnitRange}}) where T =
     range(source(sa))[indices(sa)]
-Base.range(sa::SubAxis{<:AbstractUnitRange, T, <:LinearAxis{T}}) where T =
+Base.range(sa::SubAxis{T, <:AbstractUnitRange, <:LinearAxis{T}}) where T =
     range(source(sa))[indices(sa)]
 Base.minimum(sa::SubAxis) = sa[1]
 Base.maximum(sa::SubAxis) = sa[end]
 
-function find(x::T, sa::SubAxis{Int, T}) where T
+function find(x::T, sa::SubAxis{T, Int}) where T
     i = only(indices(sa))
     (x == source(sa)[i]) ? i : error("$x not on $sa")
 end
 
-function find(x::T, sa::SubAxis{<: AbstractUnitRange{Int}, T, <: LinearAxis{T}}) where T
+function find(x::T, sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}) where T
     i = find(x, source(sa)) - first(indices(sa)) + 1
     (1 <= i <= length(sa)) || error("$x is not on $sa")
     i
@@ -93,13 +98,13 @@ end
 
 function find(
         x::Approximator{T},
-        sa::SubAxis{<: AbstractUnitRange{Int}, T, <: LinearAxis{T}}
+        sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}
     ) where T
     minimum(sa) <= value(x) <= maximum(sa) || error("$x out of bounds of subaxis $sa")
     find(approximately(value(x)), source(sa)) - first(indices(sa)) + 1
 end
 
-function find(x::T, sa::SubAxis{I, T}) where {I, T}
+function find(x::T, sa::SubAxis{T, I}) where {T, I}
     searchsortedonly(source(sa)[indices(sa)], x)
 end
 
@@ -172,6 +177,11 @@ end
 function SubGrid(src::GS, inds::Vararg{Any, DS}) where {T, DS, GS <: AbstractGrid{T, DS}}
     axs = ntuple(ds -> SubAxis(gridaxes(src, ds), inds[ds]), Val(DS))
     SubGrid(src, axs)
+end
+
+function Base.show(io::IO, ::Type{SubGrid{T, D, DS, GS, DC}}) where {T, D, DS, GS, DC}
+    compact = get(io, :compact, true)
+    print(io, "SubGrid{$T, $D", compact ? "}" : ", $DS, $GS, $DC}")
 end
 
 "Return the source grid underlying sub-grid `g`."
@@ -353,6 +363,11 @@ struct SubGriddedFunction{TY, D, GF, VV, GV} <: AbstractGriddedFunction{TY, D}
         vals = view(fvalues(src), ntuple(ds -> indices(subaxes(sg, ds)), Val(DS))...)
         new{eltype(GF), ndims(SG), GF, typeof(vals), SG}(src, vals, sg)
     end
+end
+
+function Base.show(io::IO, ::Type{SubGriddedFunction{TY, D, GF, VV, GV}}) where {TY, D, GF, VV, GV}
+    compact = get(io, :compact, true)
+    print(io, "SubGriddedFunction{$TY, $D", compact ? "}" : ", $GF, $VV, $GV}")
 end
 
 grid(sgf::SubGriddedFunction) = sgf.subgrid

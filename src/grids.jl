@@ -298,6 +298,11 @@ struct Grid{T, D, A <: NTuple{D, Axis}, DC} <: AbstractGrid{T, D}
     end
 end
 
+function Base.show(io::IO, ::Type{Grid{T, D, A, DC}}) where {T, D, A, DC}
+    compact = get(io, :compact, true)
+    print(io, "Grid{$T, $D", compact ? "}" : ", $A, $DC}")
+end
+
 Grid(T::Type, axes::Vararg{Axis}) = Grid{T}(axes)
 function Grid(axes::Vararg{Axis})
     T = Tuple{map(eltype, axes)...}

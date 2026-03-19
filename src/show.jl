@@ -13,8 +13,8 @@ Base.showarg(io::IO, ::LinearAxis{T}, ::Bool) where T =
 Base.showarg(io::IO, ::DiscreteAxis{T}, ::Bool) where T =
     print(io, "DiscreteAxis{", T, "}")
 
-Base.showarg(io::IO, ::SubAxis{<:Any, T, A}, ::Bool) where {T, A} =
-    print(io, "SubAxis{..., ", T, "}")
+Base.showarg(io::IO, ::SubAxis{T, <:Any, A}, ::Bool) where {T, A} =
+    print(io, "SubAxis{", T, "}")
 
 # --- Grids ------------------------------------------------------------------
 
@@ -27,8 +27,8 @@ Base.showarg(io::IO, ::SubGrid{T, D, DS, GS}, ::Bool) where {T, D, DS, GS} =
 # --- Gridded functions ------------------------------------------------------
 
 Base.showarg(io::IO, ::GriddedFunction{TY, D}, ::Bool) where {TY, D} =
-    print(io, "GriddedFunction{", TY, "}")
+    print(io, "GriddedFunction{$TY}")
 
 Base.showarg(io::IO, ::SubGriddedFunction{TY, D}, ::Bool) where {TY, D} =
-    print(io, "SubGriddedFunction{", TY, "}")
+    print(io, "SubGriddedFunction{$TY}")
 
