@@ -154,9 +154,9 @@ Construct from a pre-computed array of values. `size(values)` must match
 
     GriddedFunction(T::Type, g::AbstractGrid, f::Function)
 
-Construct by evaluating `f` at every grid point. `f` is called with the
-individual axis coordinates as separate arguments. The return type must be
-convertible to `T`. `g` may be a [`Grid`](@ref) or a [`SubGrid`](@ref).
+Construct by evaluating `f` at every grid point. `f` must map each element on
+grid `g` to a desired function value. The return type must be
+convertible to `T`.
 
     GriddedFunction(T::Type, g::AbstractGrid, undef)
 
@@ -176,7 +176,7 @@ end
 function GriddedFunction(T::Type, g::AbstractGrid, f::Function)
     val = Array{T}(undef, size(g))
     for I in eachindex(val)
-        val[I] = f(totuple(g[I], g)...)
+        val[I] = f(g[I])
     end
     GriddedFunction(g, val)
 end

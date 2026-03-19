@@ -18,9 +18,9 @@ grid = Grid(
 )
 
 gf = GriddedFunction(
+    Float64,
     grid,
-    (x, y, z) -> (x * y) * exp(z),
-    Float64
+    ((x, y, z),) -> (x * y) * exp(z)
 )
 ```
 
@@ -33,7 +33,7 @@ maxval, maxidx = findmax(gf)
 grid[maxidx]
 ```
 
-If you want to get an interpolated continuous version of `gfi`, the package provides an implementation of the `Interpolations.interpolate` method tailored to gridded functions. It will interpolate between values on continuous axes but only accept exact values on discrete axes:
+If you want to get an interpolated continuous version of `gfi`, the package provides an implementation of the `interpolate` method tailored to gridded functions. It will interpolate between values on continuous axes but only accept exact values on discrete axes:
 
 ```julia
 gfi = interpolate(gf)

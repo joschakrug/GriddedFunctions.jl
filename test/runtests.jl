@@ -217,157 +217,6 @@ import GriddedFunctions: find
         @test_throws Exception find(DoubleType(0.35, 10), gc)
     end
 
-    @testset "GriddedFunction — construction" begin
-        grid = Grid(
-            LinearAxis(range(0.0, 10.0, length = 500)),
-            LinearAxis(range(5.0, 20.0, length = 500)),
-            DiscreteAxis([0, 1])
-        )
-
-        gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
-
-        @test gf isa GriddedFunction
-        @test size(gf) == (500, 500, 2)
-        @test eltype(gf) == Float64
-        @test eltype(typeof(gf)) == Float64
-
-        # values at corners
-        @test gf[1, 1, 1] ≈ 0.0 * 5.0 * exp(0)      # (0, 5, 0)  → 0
-        @test gf[end, end, 1] ≈ 10.0 * 20.0 * exp(0)  # (10, 20, 0) → 200
-        @test gf[end, end, 2] ≈ 10.0 * 20.0 * exp(1)  # (10, 20, 1) → 200e
-
-        # construction over a SubGrid (discrete axis fixed → 2-D)
-        sg = SubGrid(grid, :, :, 1)
-        gf_sg = GriddedFunction(Float64, sg, (x, y) -> x * y)
-        @test gf_sg isa GriddedFunction
-        @test size(gf_sg) == (500, 500)
-        @test eltype(gf_sg) == Float64
-        @test gf_sg[1, 1]     ≈ 0.0  * 5.0
-        @test gf_sg[end, end] ≈ 10.0 * 20.0
-
-        # undef constructor over SubGrid
-        gf_undef = GriddedFunction(Float64, sg, undef)
-        @test gf_undef isa GriddedFunction
-        @test size(gf_undef) == (500, 500)
-
-        # value-array constructor over SubGrid
-        vals = [x * y for x in range(0.0, 10.0; length=500), y in range(5.0, 20.0; length=500)]
-        gf_vals = GriddedFunction(sg, vals)
-        @test gf_vals[3, 7] ≈ gf_sg[3, 7]
-    end
-
-    @testset "GriddedFunction — arithmetic" begin
-        grid = Grid(
-            LinearAxis(range(0.0, 10.0, length = 50)),
-            LinearAxis(range(5.0, 20.0, length = 50)),
-            DiscreteAxis([0, 1])
-        )
-        gf1 = GriddedFunction(Float64, grid, (x, y, z) -> x * y * exp(z))
-        gf2 = GriddedFunction(Float64, grid, (x, y, z) -> x + y + z)
-
-        gfsum  = gf1 + gf2
-        gfdiff = gf1 - gf2
-        gfprod = gf1 * gf2
-        gfdiv  = gf1 / gf2
-
-        @test gfsum[2, 3, 1]  ≈ gf1[2, 3, 1] + gf2[2, 3, 1]
-        @test gfdiff[2, 3, 1] ≈ gf1[2, 3, 1] - gf2[2, 3, 1]
-        @test gfprod[2, 3, 1] ≈ gf1[2, 3, 1] * gf2[2, 3, 1]
-        @test gfdiv[2, 3, 1]  ≈ gf1[2, 3, 1] / gf2[2, 3, 1]
-
-        # arithmetic on GFs constructed over a SubGrid
-        sg = SubGrid(grid, :, :, 1)   # fix discrete axis → 2-D SubGrid
-        sg1 = GriddedFunction(Float64, sg, (x, y) -> x * y)
-        sg2 = GriddedFunction(Float64, sg, (x, y) -> x + y)
-
-        sgsum  = sg1 + sg2
-        sgdiff = sg1 - sg2
-        sgprod = sg1 * sg2
-        sgdiv  = sg1 / sg2
-
-        # results are regular GriddedFunctions over the same SubGrid
-        @test sgsum  isa GriddedFunction
-        @test GriddedFunctions.grid(sgsum) === sg
-
-        @test sgsum[2, 3]  ≈ sg1[2, 3] + sg2[2, 3]
-        @test sgdiff[2, 3] ≈ sg1[2, 3] - sg2[2, 3]
-        @test sgprod[2, 3] ≈ sg1[2, 3] * sg2[2, 3]
-        @test sgdiv[2, 3]  ≈ sg1[2, 3] / sg2[2, 3]
-
-        # scalar arithmetic
-        @test (sg1 + 1.0)[2, 3] ≈ sg1[2, 3] + 1.0
-        @test (sg1 * 3.0)[2, 3] ≈ sg1[2, 3] * 3.0
-        @test (2.0 - sg1)[2, 3] ≈ 2.0 - sg1[2, 3]
-    end
-
-    @testset "GriddedFunction — points" begin
-        # 1-D: keys are scalars (matching 1-D grid iteration), values are function values
-        g1  = Grid(LinearAxis(range(0.0, 1.0; length=5)))
-        gf1 = GriddedFunction(Float64, g1, x -> x^2)
-
-        ps1 = collect(points(gf1))
-        @test length(ps1) == 5
-        @test all(p isa Pair for p in ps1)
-
-        # keys and values match the grid and function in iteration order
-        for (p, x, fx) in zip(ps1, g1, fvalues(gf1))
-            @test p.first  == x
-            @test p.second ≈ fx
-        end
-        # values satisfy the defining relation (p.first is a 1-element Tuple)
-        @test all(p.second ≈ only(p.first)^2 for p in ps1)
-
-        # 2-D: keys are Tuples, values are function values
-        g2  = Grid(LinearAxis(range(0.0, 1.0; length=3)),
-                   LinearAxis(range(0.0, 2.0; length=4)))
-        gf2 = GriddedFunction(Float64, g2, (x, y) -> x + y)
-
-        ps2 = collect(points(gf2))
-        @test length(ps2) == 3 * 4
-        @test all(p isa Pair for p in ps2)
-
-        # keys and values match the grid and function in iteration order
-        for (p, x, fx) in zip(ps2, g2, fvalues(gf2))
-            @test p.first  == x
-            @test p.second ≈ fx
-        end
-        # values satisfy the defining relation
-        @test all(p.second ≈ p.first[1] + p.first[2] for p in ps2)
-    end
-
-    @testset "GriddedFunction — findmax" begin
-        grid = Grid(
-            LinearAxis(range(0.0, 10.0, length = 500)),
-            LinearAxis(range(5.0, 20.0, length = 500)),
-            DiscreteAxis([0, 1])
-        )
-
-        # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
-        gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
-
-        maxval, maxI = findmax(gf)
-
-        @test maxval ≈ 10.0 * 20.0 * exp(1)
-        @test maxI == CartesianIndex(500, 500, 2)
-    end
-
-    @testset "GriddedFunction — maxpoint" begin
-        grid = Grid(
-            LinearAxis(range(0.0, 10.0, length = 500)),
-            LinearAxis(range(5.0, 20.0, length = 500)),
-            DiscreteAxis([0, 1])
-        )
-
-        # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
-        gf = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
-
-        maxpt, maxval = maxpoint(gf)
-
-        @test maxval ≈ 10.0 * 20.0 * exp(1)
-        # maxpoint returns the grid point directly (via pairs)
-        @test maxpt == (10.0, 20.0, 1)
-    end
-
     @testset "SubGrid" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))  # 0, 1, …, 10
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))  # 0, 1, 2, 3, 4
@@ -503,12 +352,163 @@ import GriddedFunctions: find
         @test find(approximately(DoubleType(0.36, 10)), sgc) == 5            # rounds to 0.4
     end
 
+    @testset "GriddedFunction — construction" begin
+        grid = Grid(
+            LinearAxis(range(0.0, 10.0, length = 500)),
+            LinearAxis(range(5.0, 20.0, length = 500)),
+            DiscreteAxis([0, 1])
+        )
+
+        gf = GriddedFunction(Float64, grid, p -> (p[1] * p[2]) * exp(p[3]))
+
+        @test gf isa GriddedFunction
+        @test size(gf) == (500, 500, 2)
+        @test eltype(gf) == Float64
+        @test eltype(typeof(gf)) == Float64
+
+        # values at corners
+        @test gf[1, 1, 1] ≈ 0.0 * 5.0 * exp(0)      # (0, 5, 0)  → 0
+        @test gf[end, end, 1] ≈ 10.0 * 20.0 * exp(0)  # (10, 20, 0) → 200
+        @test gf[end, end, 2] ≈ 10.0 * 20.0 * exp(1)  # (10, 20, 1) → 200e
+
+        # construction over a SubGrid (discrete axis fixed → 2-D)
+        sg = SubGrid(grid, :, :, 1)
+        gf_sg = GriddedFunction(Float64, sg, p -> p[1] * p[2])
+        @test gf_sg isa GriddedFunction
+        @test size(gf_sg) == (500, 500)
+        @test eltype(gf_sg) == Float64
+        @test gf_sg[1, 1]     ≈ 0.0  * 5.0
+        @test gf_sg[end, end] ≈ 10.0 * 20.0
+
+        # undef constructor over SubGrid
+        gf_undef = GriddedFunction(Float64, sg, undef)
+        @test gf_undef isa GriddedFunction
+        @test size(gf_undef) == (500, 500)
+
+        # value-array constructor over SubGrid
+        vals = [x * y for x in range(0.0, 10.0; length=500), y in range(5.0, 20.0; length=500)]
+        gf_vals = GriddedFunction(sg, vals)
+        @test gf_vals[3, 7] ≈ gf_sg[3, 7]
+    end
+
+    @testset "GriddedFunction — arithmetic" begin
+        grid = Grid(
+            LinearAxis(range(0.0, 10.0, length = 50)),
+            LinearAxis(range(5.0, 20.0, length = 50)),
+            DiscreteAxis([0, 1])
+        )
+        gf1 = GriddedFunction(Float64, grid, p -> p[1] * p[2] * exp(p[3]))
+        gf2 = GriddedFunction(Float64, grid, p -> p[1] + p[2] + p[3])
+
+        gfsum  = gf1 + gf2
+        gfdiff = gf1 - gf2
+        gfprod = gf1 * gf2
+        gfdiv  = gf1 / gf2
+
+        @test gfsum[2, 3, 1]  ≈ gf1[2, 3, 1] + gf2[2, 3, 1]
+        @test gfdiff[2, 3, 1] ≈ gf1[2, 3, 1] - gf2[2, 3, 1]
+        @test gfprod[2, 3, 1] ≈ gf1[2, 3, 1] * gf2[2, 3, 1]
+        @test gfdiv[2, 3, 1]  ≈ gf1[2, 3, 1] / gf2[2, 3, 1]
+
+        # arithmetic on GFs constructed over a SubGrid
+        sg = SubGrid(grid, :, :, 1)   # fix discrete axis → 2-D SubGrid
+        sg1 = GriddedFunction(Float64, sg, p -> p[1] * p[2])
+        sg2 = GriddedFunction(Float64, sg, p -> p[1] + p[2])
+
+        sgsum  = sg1 + sg2
+        sgdiff = sg1 - sg2
+        sgprod = sg1 * sg2
+        sgdiv  = sg1 / sg2
+
+        # results are regular GriddedFunctions over the same SubGrid
+        @test sgsum  isa GriddedFunction
+        @test GriddedFunctions.grid(sgsum) === sg
+
+        @test sgsum[2, 3]  ≈ sg1[2, 3] + sg2[2, 3]
+        @test sgdiff[2, 3] ≈ sg1[2, 3] - sg2[2, 3]
+        @test sgprod[2, 3] ≈ sg1[2, 3] * sg2[2, 3]
+        @test sgdiv[2, 3]  ≈ sg1[2, 3] / sg2[2, 3]
+
+        # scalar arithmetic
+        @test (sg1 + 1.0)[2, 3] ≈ sg1[2, 3] + 1.0
+        @test (sg1 * 3.0)[2, 3] ≈ sg1[2, 3] * 3.0
+        @test (2.0 - sg1)[2, 3] ≈ 2.0 - sg1[2, 3]
+    end
+
+    @testset "GriddedFunction — points" begin
+        # 1-D: keys are scalars (matching 1-D grid iteration), values are function values
+        g1  = Grid(LinearAxis(range(0.0, 1.0; length=5)))
+        gf1 = GriddedFunction(Float64, g1, p -> p[1]^2)
+
+        ps1 = collect(points(gf1))
+        @test length(ps1) == 5
+        @test all(p isa Pair for p in ps1)
+
+        # keys and values match the grid and function in iteration order
+        for (p, x, fx) in zip(ps1, g1, fvalues(gf1))
+            @test p.first  == x
+            @test p.second ≈ fx
+        end
+        # values satisfy the defining relation (p.first is a 1-element Tuple)
+        @test all(p.second ≈ only(p.first)^2 for p in ps1)
+
+        # 2-D: keys are Tuples, values are function values
+        g2  = Grid(LinearAxis(range(0.0, 1.0; length=3)),
+                   LinearAxis(range(0.0, 2.0; length=4)))
+        gf2 = GriddedFunction(Float64, g2, p -> p[1] + p[2])
+
+        ps2 = collect(points(gf2))
+        @test length(ps2) == 3 * 4
+        @test all(p isa Pair for p in ps2)
+
+        # keys and values match the grid and function in iteration order
+        for (p, x, fx) in zip(ps2, g2, fvalues(gf2))
+            @test p.first  == x
+            @test p.second ≈ fx
+        end
+        # values satisfy the defining relation
+        @test all(p.second ≈ p.first[1] + p.first[2] for p in ps2)
+    end
+
+    @testset "GriddedFunction — findmax" begin
+        grid = Grid(
+            LinearAxis(range(0.0, 10.0, length = 500)),
+            LinearAxis(range(5.0, 20.0, length = 500)),
+            DiscreteAxis([0, 1])
+        )
+
+        # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
+        gf = GriddedFunction(Float64, grid, p -> (p[1] * p[2]) * exp(p[3]))
+
+        maxval, maxI = findmax(gf)
+
+        @test maxval ≈ 10.0 * 20.0 * exp(1)
+        @test maxI == CartesianIndex(500, 500, 2)
+    end
+
+    @testset "GriddedFunction — maxpoint" begin
+        grid = Grid(
+            LinearAxis(range(0.0, 10.0, length = 500)),
+            LinearAxis(range(5.0, 20.0, length = 500)),
+            DiscreteAxis([0, 1])
+        )
+
+        # f = (x * y) * exp(z) is maximised at x=10, y=20, z=1
+        gf = GriddedFunction(Float64, grid, p -> (p[1] * p[2]) * exp(p[3]))
+
+        maxpt, maxval = maxpoint(gf)
+
+        @test maxval ≈ 10.0 * 20.0 * exp(1)
+        # maxpoint returns the grid point directly (via pairs)
+        @test maxpt == (10.0, 20.0, 1)
+    end
+
     @testset "SubGriddedFunction" begin
         linax1 = LinearAxis(range(0.0, 10.0, length = 11))
         linax2 = LinearAxis(range(0.0,  4.0, length =  5))
         disax  = DiscreteAxis([10, 20])
         g  = Grid(linax1, linax2, disax)
-        gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
+        gf = GriddedFunction(Float64, g, p -> p[1] + p[2] + p[3])
 
         # fix discrete dim: values should be 2-D (singleton dim dropped)
         sgf = subset(gf, :, :, 10)
@@ -539,7 +539,7 @@ import GriddedFunctions: find
 
         # 1-D SimpleType grid: restrict by index range
         g_simple  = Grid(SimpleType, LinearAxis(range(0.0, 5.0; length = 6)))
-        gf_simple = GriddedFunction(Float64, g_simple, x -> x^2)
+        gf_simple = GriddedFunction(Float64, g_simple, p -> p[1]^2)
         sgf_s = SubGriddedFunction(gf_simple, 2:5)   # indices 2..5 → values 1.0..4.0
         @test ndims(fvalues(sgf_s)) == 1
         @test size(fvalues(sgf_s))  == (4,)
@@ -548,7 +548,7 @@ import GriddedFunctions: find
 
         # DoubleType: fix discrete → 1-D values
         g_double  = Grid(DoubleType, LinearAxis(range(0.0, 10.0; length = 11)), DiscreteAxis([2, 3, 4]))
-        gf_double = GriddedFunction(Float64, g_double, (x, y) -> x * y)
+        gf_double = GriddedFunction(Float64, g_double, p -> p[1] * p[2])
         sgf_d = subset(gf_double, :, 3)
         @test ndims(fvalues(sgf_d)) == 1
         @test size(fvalues(sgf_d))  == (11,)
@@ -563,7 +563,7 @@ import GriddedFunctions: find
         disax  = DiscreteAxis([10, 20])
 
         g  = Grid(x = linax1, y = linax2, z = disax)
-        gf = GriddedFunction(Float64, g, (x, y, z) -> x + y + z)
+        gf = GriddedFunction(Float64, g, p -> p.x + p.y + p.z)
 
         # fix :z — 2-D values
         sgf = subset(gf, z = 10)
@@ -592,7 +592,7 @@ import GriddedFunctions: find
             DiscreteAxis([0, 1])
         )
 
-        gf  = GriddedFunction(Float64, grid, (x, y, z) -> (x * y) * exp(z))
+        gf  = GriddedFunction(Float64, grid, p -> (p[1] * p[2]) * exp(p[3]))
         gfi = interpolate(gf)
 
         @test gfi isa GriddedFunctions.GFInterpolation
@@ -620,7 +620,7 @@ import GriddedFunctions: find
             LinearAxis(range(0.0, 10.0, length = 200))
         )
 
-        gf  = GriddedFunction(Float64, grid, (x, y) -> x * y)
+        gf  = GriddedFunction(Float64, grid, p -> p[1] * p[2])
         gfi = interpolate(gf)
 
         @test gfi isa GriddedFunctions.GFInterpolation
@@ -636,7 +636,7 @@ import GriddedFunctions: find
             DiscreteAxis([0, 4, 5])
         )
 
-        gf  = GriddedFunction(Float64, g, (x, y) -> x + y)
+        gf  = GriddedFunction(Float64, g, p -> p[1] + p[2])
 
         # Interpolation construction
         gfi = interpolate(gf)
@@ -670,7 +670,7 @@ import GriddedFunctions: find
         @test  SimpleType(-1.0) ∉ g   # x < 0 is outside the grid
 
         # GriddedFunction construction and indexing
-        gf = GriddedFunction(Float64, g, x -> x^2)
+        gf = GriddedFunction(Float64, g, p -> p[1]^2)
         @test gf isa GriddedFunction
         @test gf[1]     ≈ 0.0
         @test gf[end] ≈ 25.0
@@ -714,7 +714,7 @@ import GriddedFunctions: find
         @test fvalues(gf_par) ≈ fvalues(gf)
 
         # argmap (serial) — returns a new object, source unchanged
-        gf_src = GriddedFunction(Float64, g, (x, z) -> 0.0)
+        gf_src = GriddedFunction(Float64, g, _ -> 0.0)
         gf_new = argmap(t -> t[1]^2 + t[2], gf_src)
         @test gf_new !== gf_src
         @test fvalues(gf_new)[1, 1]   ≈ 0.0^2 + 0
