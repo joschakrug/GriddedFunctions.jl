@@ -286,10 +286,10 @@ axis names.
 struct Grid{T, D, A <: NTuple{D, Axis}, DC} <: AbstractGrid{T, D}
     axes::A
 
-    function Grid{T}(axes::NTuple{D, Axis}) where {T, D}
+    function Grid{T}(axes::AT) where {T, D, AT <: NTuple{D, Axis}}
         DC = 0
         for d in 1:D
-            if axes[d] isa ContinuousAxis
+            if iscontinuous(AT.parameters[d]) === Continuous()
                 d == (DC + 1) ? DC += 1 : error("Continuous axes need to come first when defining a grid")
             end
         end

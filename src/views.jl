@@ -74,39 +74,45 @@ isfixed(::Type{<:SubAxis{<:Any, Int}}) = true
 isfixed(::Type{<:SubAxis}) = false
 isfixed(sa::SubAxis) = isfixed(typeof(sa))
 
+iscontinuous(::Type{<:SubAxis{<:Any, <:AbstractUnitRange, A}}) where A =
+    iscontinuous(A)
+# iscontinuous(::Type{<:SubAxis}) = Discrete()
+
 # implement the Axis interface
 
 Base.length(sa::SubAxis) = length(indices(sa))
 Base.getindex(sa::SubAxis, i::Int) = source(sa)[indices(sa)[i]]
-Base.range(sa::SubAxis{T, <:AbstractUnitRange, <:SubAxis{T, <:AbstractUnitRange}}) where T =
-    range(source(sa))[indices(sa)]
-Base.range(sa::SubAxis{T, <:AbstractUnitRange, <:LinearAxis{T}}) where T =
-    range(source(sa))[indices(sa)]
-Base.minimum(sa::SubAxis) = sa[1]
-Base.maximum(sa::SubAxis) = sa[end]
 
-function find(x::T, sa::SubAxis{T, Int}) where T
-    i = only(indices(sa))
-    (x == source(sa)[i]) ? i : error("$x not on $sa")
-end
+points(sa::SubAxis) = points(source(sa))[indices(sa)]
 
-function find(x::T, sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}) where T
-    i = find(x, source(sa)) - first(indices(sa)) + 1
-    (1 <= i <= length(sa)) || error("$x is not on $sa")
-    i
-end
+# these only work if the source axes have a range and a bestguessindex,
+# respectively
+Base.range(sa::SubAxis) = range(source(sa))[indices(sa)]
+bestguessindex(x::T, sa::SubAxis{T}) where T =
+    bestguessindex(x, source(sa)) - first(indices(sa)) + 1
 
-function find(
-        x::Approximator{T},
-        sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}
-    ) where T
-    minimum(sa) <= value(x) <= maximum(sa) || error("$x out of bounds of subaxis $sa")
-    find(approximately(value(x)), source(sa)) - first(indices(sa)) + 1
-end
+# function find(x::T, sa::SubAxis{T, Int}) where T
+#     i = only(indices(sa))
+#     (x == source(sa)[i]) ? i : error("$x not on $sa")
+# end
 
-function find(x::T, sa::SubAxis{T, I}) where {T, I}
-    searchsortedonly(source(sa)[indices(sa)], x)
-end
+# function find(x::T, sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}) where T
+#     i = find(x, source(sa)) - first(indices(sa)) + 1
+#     (1 <= i <= length(sa)) || error("$x is not on $sa")
+#     i
+# end
+
+# function find(
+#         x::Approximator{T},
+#         sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}
+#     ) where T
+#     minimum(sa) <= value(x) <= maximum(sa) || error("$x out of bounds of subaxis $sa")
+#     find(approximately(value(x)), source(sa)) - first(indices(sa)) + 1
+# end
+
+# function find(x::T, sa::SubAxis{T, I}) where {T, I}
+#     searchsortedonly(source(sa)[indices(sa)], x)
+# end
 
 """
     SubGrid{T, D, DS, GS, DC} <: AbstractGrid{T, D}

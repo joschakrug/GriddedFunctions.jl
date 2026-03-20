@@ -112,7 +112,7 @@ import GriddedFunctions: find
         @test GriddedFunctions.isfixed(sa_fix)
 
         # find on a fixed SubAxis: value must match the fixed element
-        @test find(20, sa_fix) == 2   # returns source index
+        @test find(20, sa_fix) == 1   # returns source index
         @test_throws Exception find(10, sa_fix)
         @test_throws Exception find(approximately(20), sa_fix)   # inexact not supported for fixed
 

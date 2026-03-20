@@ -35,6 +35,21 @@ approximately(x::T) where T = Approximator{T}(x)
 "Return the wrapped value of an [`Approximator`](@ref)."
 value(x::Approximator) = x.x
 
+"""
+    Continuous
+
+Defines the `Continuous` trait of [`Axis`](@ref).
+
+If the `iscontinuous` method returns `Continuous()` for an `Axis` type,
+this axis is treated as continuous. Any axis with the continuous trait
+needs to implement the following methods:
+
+- [`bestguessindex`](@ref)
+"""
+struct Continuous end
+
+"See [`Continuous`](@ref)"
+struct Discrete end
 
 """
     Axis{T} <: AbstractVector{T}
@@ -46,37 +61,86 @@ following methods:
 
 - `Base.length`
 - `Base.getindex` (for integers as well as for unit ranges)
-- `Base.in`
-- [`find`](@ref)
+- [`points`](@ref)
+- [`iscontinuous`](@ref)
 """
 abstract type Axis{T} <: AbstractVector{T} end
 
 Base.eltype(::Type{Axis{T}}) where T = T
-Base.size(ax::A) where {A <: Axis} = (length(ax),)
+Base.size(ax::Axis) = (length(ax),)
+Base.minimum(ax::Axis) = ax[1]
+Base.maximum(ax::Axis) = ax[end]
+
+"""
+    points(ax::Axis)
+
+Return the vector of points on axis `ax`.
+"""
+function points end
+
+"""
+    iscontinuous(::Type{A}) where A <: Axis
+
+`Continuous()` if `A` is continuous, `Discrete()` if not.
+
+This function identifies the `Continuous` trait.
+"""
+function iscontinuous end
+iscontinuous(::Type{<:Axis}) = Discrete()
 
 """
     find(x::T, ax::Axis{T}) where T
 
 Return the (integer) index of value `x` on axis `ax`.
 
-If `x` is wrapped in [`approximately`](@ref), tolerate inexact matches: As long
+If `x` is wrapped in [`approximately`](@ref), tolerate inexact matches on
+continuous axes: As long
 as `x` is within the bounds of `ax`, return the index of the value closest to
 `x` on the axis. Otherwise, throw an error.
 """
-function find end
+find(x::Union{T, Approximator{T}}, ax::A) where {T, A <: Axis{T}} =
+    find(iscontinuous(A), x, ax)
+
+find(::Discrete, x::Union{T, Approximator{T}}, ax::Axis{T}) where T =
+    searchsortedonly(points(ax), x)
+
+function find(::Continuous, x::T, ax::Axis{T}) where T
+    i = round(Int, bestguessindex(x, ax))
+    isapprox(ax[i], x) ? i : error("$x is not on $ax")
+end
+
+function find(::Continuous, x::Approximator{T}, ax::Axis{T}) where T
+    bestguess = bestguessindex(value(x), ax)
+    1 <= bestguess <= length(ax) || error("$x is outside the bounds of $ax")
+    round(Int, bestguess)
+end
+
+# """
+#     ContinuousAxis{T} <: Axis{T}
+
+# A grid axis representing a continuous range of values of type `T`.
+
+# Each subtype of the abstract type `ContinuousAxis{T}` needs to define the
+# additional methods:
+
+# - [`bestguessindex`](@ref)
+# """
+# abstract type ContinuousAxis{T} <: Axis{T} end
+
+# iscontinuous(::Type{<:ContinuousAxis}) = Continuous()
 
 """
-    ContinuousAxis{T} <: Axis{T}
+    bestguessindex(x::T, ax::Axis{T})
 
-A grid axis representing a continuous range of values of type `T`.
+Compute the best guess for the index of `x` on `ax` based on the structure of
+`ax`. Any axis type with the [`Continuous`](@ref) trait needs to implement this
+method.
 
-Each subtype of the abstract type `ContinuousAxis{T}` needs to define the
-additional methods:
-
-- `Base.minimum`
-- `Base.maximum`
+For a `LinearAxis`, the best guess can be computed as
+`(x - minimum(ax))/(maximum(ax)-minimum(ax)) * length(ax) + 1`. For other types
+of continuous axes, other formulas may apply.
 """
-abstract type ContinuousAxis{T} <: Axis{T} end
+function bestguessindex end
 
 """
     LinearAxis{T, S <: StepRangeLen{T}} <: ContinuousAxis{T}
@@ -92,11 +156,14 @@ A linearly scaled continuous grid axis representing values of type `T`.
 Construct a linear axis from a step range `r`. Use `range(start, stop; length=n)`
 or `range(start, stop; step=s)` to create suitable ranges.
 """
-struct LinearAxis{T, S <: StepRangeLen{T}} <: ContinuousAxis{T}
+struct LinearAxis{T, S <: StepRangeLen{T}} <: Axis{T}
     range::S
 end
 
+iscontinuous(::Type{<:LinearAxis}) = Continuous()
+
 Base.range(lax::LinearAxis) = lax.range
+points(lax::LinearAxis) = collect(range(lax))
 
 for f in (:length, :getindex, :minimum, :maximum, :iterate)
     @eval Base.$f(lax::LinearAxis, args...) = Base.$f(range(lax), args...)
@@ -114,20 +181,22 @@ function Base.in(x::Approximator{T}, axis::LinearAxis{T}) where T
     minimum(axis) <= T(x) <= maximum(axis)
 end
 
-function _bestguessindex(x::T, lax::LinearAxis{T}) where T
+# implement the Continuous trait interface
+
+function bestguessindex(x::T, lax::LinearAxis{T}) where T
     (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
 end
 
-function find(x::T, lax::LinearAxis{T}) where T
-    i = round(Int, _bestguessindex(x, lax))
-    isapprox(lax[i], x) ? i : error("$x is not on $lax")
-end
+# function find(x::T, lax::LinearAxis{T}) where T
+#     i = round(Int, _bestguessindex(x, lax))
+#     isapprox(lax[i], x) ? i : error("$x is not on $lax")
+# end
 
-function find(x::Approximator{T}, lax::LinearAxis{T}) where T
-    bestguess = _bestguessindex(value(x), lax)
-    1 <= bestguess <= length(lax) || error("$x is outside the bounds of $lax")
-    round(Int, bestguess)
-end
+# function find(x::Approximator{T}, lax::LinearAxis{T}) where T
+#     bestguess = _bestguessindex(value(x), lax)
+#     1 <= bestguess <= length(lax) || error("$x is outside the bounds of $lax")
+#     round(Int, bestguess)
+# end
 
 """
     DiscreteAxis{T} <: Axis{T}
@@ -153,7 +222,6 @@ struct DiscreteAxis{T} <: Axis{T}
     end
 end
 
-"Return the underlying sorted vector of points of `dax`."
 points(dax::DiscreteAxis) = dax.points
 
 Base.length(dax::DiscreteAxis) = length(points(dax))
@@ -163,9 +231,11 @@ Base.minimum(ax::DiscreteAxis) = ax[1]
 Base.maximum(ax::DiscreteAxis) = ax[end]
 Base.in(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T = in(x, points(dax))
 
-function find(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T
-    searchsortedonly(points(dax), x)
-end
+# function find(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T
+#     searchsortedonly(points(dax), x)
+# end
+
+# iscontinuous(::Type{<:DiscreteAxis}) = Discrete()
 
 "Return first occurence of item in collection, error if not available."
 function searchsortedonly(collection, item)
