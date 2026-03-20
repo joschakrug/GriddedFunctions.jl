@@ -115,20 +115,6 @@ function find(::Continuous, x::Approximator{T}, ax::Axis{T}) where T
     round(Int, bestguess)
 end
 
-# """
-#     ContinuousAxis{T} <: Axis{T}
-
-# A grid axis representing a continuous range of values of type `T`.
-
-# Each subtype of the abstract type `ContinuousAxis{T}` needs to define the
-# additional methods:
-
-# - [`bestguessindex`](@ref)
-# """
-# abstract type ContinuousAxis{T} <: Axis{T} end
-
-# iscontinuous(::Type{<:ContinuousAxis}) = Continuous()
-
 """
     bestguessindex(x::T, ax::Axis{T})
 
@@ -187,17 +173,6 @@ function bestguessindex(x::T, lax::LinearAxis{T}) where T
     (x - minimum(lax)) / (maximum(lax) - minimum(lax)) * (length(lax) - 1) + 1
 end
 
-# function find(x::T, lax::LinearAxis{T}) where T
-#     i = round(Int, _bestguessindex(x, lax))
-#     isapprox(lax[i], x) ? i : error("$x is not on $lax")
-# end
-
-# function find(x::Approximator{T}, lax::LinearAxis{T}) where T
-#     bestguess = _bestguessindex(value(x), lax)
-#     1 <= bestguess <= length(lax) || error("$x is outside the bounds of $lax")
-#     round(Int, bestguess)
-# end
-
 """
     DiscreteAxis{T} <: Axis{T}
 
@@ -230,12 +205,6 @@ Base.getindex(dax::DiscreteAxis, i) = getindex(points(dax), i)
 Base.minimum(ax::DiscreteAxis) = ax[1]
 Base.maximum(ax::DiscreteAxis) = ax[end]
 Base.in(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T = in(x, points(dax))
-
-# function find(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T
-#     searchsortedonly(points(dax), x)
-# end
-
-# iscontinuous(::Type{<:DiscreteAxis}) = Discrete()
 
 "Return first occurence of item in collection, error if not available."
 function searchsortedonly(collection, item)

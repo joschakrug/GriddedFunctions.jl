@@ -74,45 +74,22 @@ isfixed(::Type{<:SubAxis{<:Any, Int}}) = true
 isfixed(::Type{<:SubAxis}) = false
 isfixed(sa::SubAxis) = isfixed(typeof(sa))
 
-iscontinuous(::Type{<:SubAxis{<:Any, <:AbstractUnitRange, A}}) where A =
-    iscontinuous(A)
-# iscontinuous(::Type{<:SubAxis}) = Discrete()
-
 # implement the Axis interface
 
 Base.length(sa::SubAxis) = length(indices(sa))
 Base.getindex(sa::SubAxis, i::Int) = source(sa)[indices(sa)[i]]
-
 points(sa::SubAxis) = points(source(sa))[indices(sa)]
 
-# these only work if the source axes have a range and a bestguessindex,
-# respectively
-Base.range(sa::SubAxis) = range(source(sa))[indices(sa)]
+# only works if the source axis can be represented as a range as well
+Base.range(sa::SubAxis{<:Any, <:AbstractUnitRange}) =
+    range(source(sa))[indices(sa)]
+
+# implement the Continuous trait interface (where applicable)
+
+iscontinuous(::Type{<:SubAxis{<:Any, <:AbstractUnitRange, A}}) where A =
+    iscontinuous(A)
 bestguessindex(x::T, sa::SubAxis{T}) where T =
     bestguessindex(x, source(sa)) - first(indices(sa)) + 1
-
-# function find(x::T, sa::SubAxis{T, Int}) where T
-#     i = only(indices(sa))
-#     (x == source(sa)[i]) ? i : error("$x not on $sa")
-# end
-
-# function find(x::T, sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}) where T
-#     i = find(x, source(sa)) - first(indices(sa)) + 1
-#     (1 <= i <= length(sa)) || error("$x is not on $sa")
-#     i
-# end
-
-# function find(
-#         x::Approximator{T},
-#         sa::SubAxis{T, <:AbstractUnitRange{Int}, <:LinearAxis{T}}
-#     ) where T
-#     minimum(sa) <= value(x) <= maximum(sa) || error("$x out of bounds of subaxis $sa")
-#     find(approximately(value(x)), source(sa)) - first(indices(sa)) + 1
-# end
-
-# function find(x::T, sa::SubAxis{T, I}) where {T, I}
-#     searchsortedonly(source(sa)[indices(sa)], x)
-# end
 
 """
     SubGrid{T, D, DS, GS, DC} <: AbstractGrid{T, D}
