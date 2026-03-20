@@ -89,6 +89,19 @@ function iscontinuous end
 iscontinuous(::Type{<:Axis}) = Discrete()
 
 """
+    bestguessindex(x::T, ax::Axis{T})
+
+Compute the best guess for the index of `x` on `ax` based on the structure of
+`ax`. Any axis type with the [`Continuous`](@ref) trait needs to implement this
+method.
+
+For a `LinearAxis`, the best guess can be computed as
+`(x - minimum(ax))/(maximum(ax)-minimum(ax)) * length(ax) + 1`. For other types
+of continuous axes, other formulas may apply.
+"""
+function bestguessindex end
+
+"""
     find(x::T, ax::Axis{T}) where T
 
 Return the (integer) index of value `x` on axis `ax`.
@@ -116,20 +129,28 @@ function find(::Continuous, x::Approximator{T}, ax::Axis{T}) where T
 end
 
 """
-    bestguessindex(x::T, ax::Axis{T})
+    onaxisapprox(x::T, y::T, ax::Axis{T}; steptol = 0.5) where T
 
-Compute the best guess for the index of `x` on `ax` based on the structure of
-`ax`. Any axis type with the [`Continuous`](@ref) trait needs to implement this
-method.
+True if the difference between `x` and `y` on `ax` is smaller than `steptol`
+times the local axis step size.
 
-For a `LinearAxis`, the best guess can be computed as
-`(x - minimum(ax))/(maximum(ax)-minimum(ax)) * length(ax) + 1`. For other types
-of continuous axes, other formulas may apply.
+This is valuable when, for example, a `GriddedFunction` has a discontinuity
+at a given point (e.g. 0) but that point is not exactly on the axis (e.g.
+because the underlying range only includes -0.01 and 0.01, not 0. itself).
+
+`steptol` defaults to 0.5, which ensures that only the value of `x` closest to
+`y` on `ax` returns true.
 """
-function bestguessindex end
+onaxisapprox(x::T, y::T, ax::A; steptol = 0.5) where {T, A <: Axis{T}} =
+    onaxisapprox(iscontinuous(A), x, y, ax, steptol)
+
+onaxisapprox(::Continuous, x, y, ax, steptol) =
+    abs(bestguessindex(x, ax) - bestguessindex(y, ax)) < steptol
+
+onaxisapprox(::Discrete, x, y, ax, steptol) = isapprox(x, y)
 
 """
-    LinearAxis{T, S <: StepRangeLen{T}} <: ContinuousAxis{T}
+    LinearAxis{T, S <: StepRangeLen{T}} <: Axis{T}
 
 A linearly scaled continuous grid axis representing values of type `T`.
 
@@ -145,6 +166,8 @@ or `range(start, stop; step=s)` to create suitable ranges.
 struct LinearAxis{T, S <: StepRangeLen{T}} <: Axis{T}
     range::S
 end
+
+Base.show(io::IO, ::Type{<:LinearAxis{T}}) where T = print(io, "LinearAxis{$T}")
 
 iscontinuous(::Type{<:LinearAxis}) = Continuous()
 

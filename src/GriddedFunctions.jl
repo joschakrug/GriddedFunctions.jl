@@ -9,7 +9,8 @@ include("views.jl")
 include("show.jl")
 
 export approximately
-export Axis, LinearAxis, DiscreteAxis, AbstractGrid, Grid, gridaxes, inbounds
+export Axis, LinearAxis, DiscreteAxis, onaxisapprox
+export AbstractGrid, Grid, gridaxes, inbounds
 export AbstractGriddedFunction, GriddedFunction, GFInterpolation
 export interpolate, argmap, argmap!, points, maxpoint, fvalues, grid
 export SubAxis, SubGrid, SubGriddedFunction, subset

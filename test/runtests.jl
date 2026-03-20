@@ -46,6 +46,11 @@ import GriddedFunctions: find
         @test find(approximately(0.151), lax) == 3
         @test_throws Exception find(approximately(10.01), lax)
 
+        # approximation
+        @test onaxisapprox(lax[51], 5.0, lax)
+        @test onaxisapprox(lax[51], 4.96, lax)
+        @test !onaxisapprox(lax[51], 4.94, lax)
+
         # iteration matches the underlying range
         @test collect(lax) ≈ collect(range(0.0, 10.0, length = 101))
     end
