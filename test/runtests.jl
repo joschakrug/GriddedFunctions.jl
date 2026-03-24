@@ -637,6 +637,17 @@ import GriddedFunctions: find
 
         # from the README: a discrete value not on the axis must throw
         @test_throws Exception gfi(2.031, 11.007, 2)
+
+        # out-of-bounds on continuous axes: flat extrapolation (clamped to boundary)
+        @test gfi(-1.0,  5.0, 0) ≈ gfi(0.0,  5.0, 0)   # x below lower bound
+        @test gfi(15.0,  5.0, 0) ≈ gfi(10.0, 5.0, 0)   # x above upper bound
+        @test gfi( 5.0,  0.0, 0) ≈ gfi(5.0,  5.0, 0)   # y below lower bound
+        @test gfi( 5.0, 30.0, 0) ≈ gfi(5.0, 20.0, 0)   # y above upper bound
+        # same for the other discrete slice
+        @test gfi(15.0, 20.0, 1) ≈ gfi(10.0, 20.0, 1)
+
+        # discrete value not in axis still throws even when continuous values are out of bounds
+        @test_throws Exception gfi(-1.0, 0.0, 2)
     end
 
     @testset "Interpolation — no discrete axes" begin
@@ -652,6 +663,12 @@ import GriddedFunctions: find
         @test gfi(3.7, 6.2) ≈ 3.7 * 6.2 atol=1e-6
         @test gfi(0.0, 0.0) ≈ 0.0
         @test gfi(10.0, 10.0) ≈ 100.0
+
+        # out-of-bounds on continuous axes: flat extrapolation
+        @test gfi(-1.0,  5.0) ≈ gfi(0.0,  5.0)    # x below lower bound → clamped to x=0
+        @test gfi(15.0,  5.0) ≈ gfi(10.0, 5.0)    # x above upper bound → clamped to x=10
+        @test gfi( 5.0, -1.0) ≈ gfi(5.0,  0.0)    # y below lower bound → clamped to y=0
+        @test gfi( 5.0, 15.0) ≈ gfi(5.0, 10.0)    # y above upper bound → clamped to y=10
     end
 
     @testset "Interpolation - custom type" begin

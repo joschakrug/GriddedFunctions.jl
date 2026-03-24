@@ -294,7 +294,8 @@ struct GFInterpolation{GF <: AbstractGriddedFunction, DD, SITP}
         itps = map(discreteindices(grid(gf))) do I
             subgf = continuousview(gf, I)
             itp = Interpolations.interpolate(fvalues(subgf), interpmode)
-            Interpolations.scale(itp, map(range, gridaxes(grid(subgf))))
+            sitp = Interpolations.scale(itp, map(range, gridaxes(grid(subgf))))
+            Interpolations.extrapolate(sitp, Interpolations.Flat())
         end
 
         new{GF, ndiscretedims(GF), eltype(itps)}(gf, itps)
