@@ -30,11 +30,6 @@ struct SubAxis{T, I <: Union{Int, AbstractUnitRange{Int}}, A <: Axis{T}} <: Axis
     indices::I
 end
 
-function Base.show(io::IO, ::Type{SubAxis{T, I, A}}) where {T, I, A}
-    compact = get(io, :compact, false)
-    print(io, "SubAxis{", T, compact ? "$I, $A}" : "}")
-end
-
 function SubAxis(source::A, ::Colon) where {T, A <: Axis{T}}
     I = typeof(1:length(source))
     SubAxis{T, I, A}(source, 1:length(source))
@@ -188,12 +183,12 @@ isfixed(::Type{SubGrid{T, D, DS, GS, SA}}, ds) where {T, D, DS, GS, SA} =
 isfixed(g::SubGrid, ds) = isfixed(typeof(g), ds)
 
 "Return the source index at which source dimension `ds` is fixed in sub-grid `g`."
-fixedat(g::SubGrid, ds) = indices(subaxes(g, ds))
+fixedat(g::SubGrid, ds) = only(indices(subaxes(g, ds)))
 
 "Return the axis value to which source dimension `ds` is fixed in sub-grid `g`."
 function fixedto(g::SubGrid, ds)
     sa = subaxes(g, ds)
-    source(sa)[indices(sa)]
+    only(source(sa)[indices(sa)])
 end
 
 """
@@ -359,7 +354,6 @@ function continuousview(src::AbstractGriddedFunction, I_disc::CartesianIndex)
     DC = ncontinuousdims(src)
     DD = ndiscretedims(src)
     DS = DC + DD
-    g = grid(src)
     inds = ntuple(ds -> ds <= DC ? (:) : I_disc[ds - DC], Val(DS))
     SubGriddedFunction(src, inds...)
 end
