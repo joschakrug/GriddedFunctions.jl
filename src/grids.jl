@@ -1,9 +1,10 @@
 """
-    dimnames(::Type{T}) where T
+    dimnames(::Type{T}, d = nothing) where T
 
 Returns the names of the different dimensions as per data type `T`. Can be
 overloaded for any type `T` in order to support axis selection by name for
-any [`AbstractGrid{T}`](@ref) and its subtypes.
+any [`AbstractGrid{T}`](@ref) and its subtypes. If `d` is specified, return
+the name of dimension `d`.
 
 Defaults to an empty tuple for all types that do not have dimension names
 specified. Defaults to the field names of `T` if `T` is a named tuple.
@@ -35,6 +36,11 @@ Each subtype of Grid needs to implement at least the following methods:
 - [`ncontinuousdims`](@ref)
 """
 abstract type AbstractGrid{T, D} <: AbstractArray{T, D} end
+
+Base.show(io::IO, ::Type{G}) where {T, D, G <: AbstractGrid{T, D}} =
+    print(io, "$(nameof(G)){$T, $D}")
+Base.show(io::IO, ::MIME"text/plain", ::Type{G}) where {G <: AbstractGrid} =
+    get(io, :compact, false) ? show(io, G) : invoke(show, Tuple{IO, Type}, io, G)
 
 """
     gridaxes(g::AbstractGrid, d = nothing)
@@ -146,8 +152,20 @@ function Base.getindex(g::AbstractGrid{T, 1}, i::Int) where T
     topoint(t, g)
 end
 
-Base.eltype(::Type{<: AbstractGrid{T}}) where T = T
 Base.size(g::AbstractGrid{T, D}) where {T, D} = ntuple(d -> length(gridaxes(g, d)), Val(D))
+
+function Base.show(io::IO, g::G) where {T, D, G <: AbstractGrid{T, D}}
+    print(io, "$(nameof(G)){$T}(")
+    for d in 1:D
+        dimnames(G) === () || print(io, "$(dimnames(G, d)) = ")
+        show(io, gridaxes(g, d))
+        d < D && print(io, ", ")
+    end
+    print(io, ")")
+end
+
+Base.showarg(io::IO, ::G, ::Bool) where {T, G <: AbstractGrid{T}} =
+    print(io, "$(nameof(G)){$T}")
 
 """
     continuousaxes(g::AbstractGrid)

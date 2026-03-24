@@ -11,8 +11,11 @@ struct Approximator{T}
     x::T
 end
 
-(::Type{T})(x::Approximator{T}) where T = x.x
-Base.convert(::Type{T}, x::Approximator{T}) where T = T(x)
+"Return the wrapped value of an [`Approximator`](@ref)."
+value(x::Approximator) = x.x
+Base.convert(::Type{T}, x::Approximator{T}) where T = value(x)
+
+Base.show(io::IO, app::Approximator) = print(io, "~ $(value(app))")
 
 """
     approximately(x::T) where T
@@ -31,9 +34,6 @@ find(approximately(5.01), ax)   # returns index 6
 ```
 """
 approximately(x::T) where T = Approximator{T}(x)
-
-"Return the wrapped value of an [`Approximator`](@ref)."
-value(x::Approximator) = x.x
 
 """
     Continuous
@@ -59,17 +59,20 @@ A grid axis with axis element type `T`.
 Each subtype of the abstract type `Axis{T}` needs to define at least the
 following methods:
 
-- `Base.length`
-- `Base.getindex` (for integers as well as for unit ranges)
 - [`points`](@ref)
-- [`iscontinuous`](@ref)
+
+It can optionally overwrite the following default methods:
+
+- `Base.length` - defaults to length of the axis' point vector
+- `Base.getindex` (for integers as well as for unit ranges) -
+  passed through to the axis' vector of points by default
+- [`iscontinuous`](@ref) - defaults to `Discrete()`
 """
 abstract type Axis{T} <: AbstractVector{T} end
 
-Base.eltype(::Type{Axis{T}}) where T = T
-Base.size(ax::Axis) = (length(ax),)
-Base.minimum(ax::Axis) = ax[1]
-Base.maximum(ax::Axis) = ax[end]
+Base.show(io::IO, ::Type{A}) where {T, A <: Axis{T}} = print(io, "$(nameof(A)){$T}")
+Base.show(io::IO, ::MIME"text/plain", ::Type{A}) where {A <: Axis} =
+    get(io, :compact, false) ? show(io, A) : print(io, "$A")
 
 """
     points(ax::Axis)
@@ -100,6 +103,27 @@ For a `LinearAxis`, the best guess can be computed as
 of continuous axes, other formulas may apply.
 """
 function bestguessindex end
+
+Base.show(io::IO, ax::A) where {T, A <: Axis{T}} =
+    print(io, "$(nameof(A))($(points(ax)))")
+Base.showarg(io::IO, ::A, ::Bool) where {T, A <: Axis{T}} =
+    print(io, "$(nameof(A)){$T}")
+
+Base.size(ax::Axis) = (length(ax),)
+Base.minimum(ax::Axis) = ax[1]
+Base.maximum(ax::Axis) = ax[end]
+Base.length(ax::Axis) = length(points(ax))
+Base.getindex(ax::Axis, i) = getindex(points(ax), i)
+
+Base.in(x::Union{T, Approximator{T}}, ax::A) where {T, A <: Axis{T}} =
+    _inaxis(iscontinuous(A), x, ax)
+
+_inaxis(::Discrete, x::T, ax::Axis{T}) where T = in(x, points(ax))
+_inaxis(::Discrete, x::Approximator{T}, ax::Axis{T}) where T =
+    _inaxis(Discrete(), value(x), ax)
+_inaxis(::Continuous, x::T, ax::Axis{T}) where T = in(x, points(ax))
+_inaxis(::Continuous, x::Approximator{T}, ax::Axis{T}) where T =
+    minimum(ax) <= value(x) <= maximum(ax)
 
 """
     find(x::T, ax::Axis{T}) where T
@@ -167,12 +191,20 @@ struct LinearAxis{T, S <: StepRangeLen{T}} <: Axis{T}
     range::S
 end
 
-Base.show(io::IO, ::Type{<:LinearAxis{T}}) where T = print(io, "LinearAxis{$T}")
-
 iscontinuous(::Type{<:LinearAxis}) = Continuous()
 
 Base.range(lax::LinearAxis) = lax.range
 points(lax::LinearAxis) = collect(range(lax))
+
+Base.show(io::IO, ax::LinearAxis{T}) where T =
+    print(io, "LinearAxis($(range(ax)))")
+function Base.show(io::IO, ::MIME"text/plain", ax::LinearAxis{T}) where T
+    compact = get(io, :compact, false)
+    compact ? show(io, ax) : begin
+        Base.showarg(io, ax, true)
+        print(io, "($(range(ax)))")
+    end
+end
 
 for f in (:length, :getindex, :minimum, :maximum, :iterate)
     @eval Base.$f(lax::LinearAxis, args...) = Base.$f(range(lax), args...)
@@ -180,14 +212,6 @@ end
 
 function Base.getindex(ax::LAX, rng::UnitRange{Int}) where {LAX <: LinearAxis}
     LAX(range(ax[minimum(rng)], ax[maximum(rng)], length = length(rng)))
-end
-
-function Base.in(x::T, axis::LinearAxis{T}) where T
-    x in range(axis)
-end
-
-function Base.in(x::Approximator{T}, axis::LinearAxis{T}) where T
-    minimum(axis) <= T(x) <= maximum(axis)
 end
 
 # implement the Continuous trait interface
@@ -221,13 +245,7 @@ struct DiscreteAxis{T} <: Axis{T}
 end
 
 points(dax::DiscreteAxis) = dax.points
-
-Base.length(dax::DiscreteAxis) = length(points(dax))
 Base.getindex(dax::DiscreteAxis, rng::AbstractVector{Int}) = DiscreteAxis(points(dax)[rng])
-Base.getindex(dax::DiscreteAxis, i) = getindex(points(dax), i)
-Base.minimum(ax::DiscreteAxis) = ax[1]
-Base.maximum(ax::DiscreteAxis) = ax[end]
-Base.in(x::Union{T, Approximator{T}}, dax::DiscreteAxis{T}) where T = in(x, points(dax))
 
 "Return first occurence of item in collection, error if not available."
 function searchsortedonly(collection, item)

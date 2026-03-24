@@ -15,6 +15,12 @@ Each subtype must implement:
 """
 abstract type AbstractGriddedFunction{TY, D} <: AbstractArray{TY, D} end
 
+Base.show(io::IO, ::Type{GF}) where {TY, D, GF <: AbstractGriddedFunction{TY, D}} =
+    print(io, "$(nameof(GF)){$TY, $D}")
+function Base.show(io::IO, ::MIME"text/plain", ::Type{GF}) where {GF <: AbstractGriddedFunction}
+    get(io, :compact, false) ? show(io, GF) : invoke(show, Tuple{IO, Type}, io, GF)
+end
+
 """
     grid(gf::AbstractGriddedFunction)
 
@@ -48,6 +54,11 @@ argtype(GF::Type{T}) where T <: AbstractGriddedFunction = eltype(gridtype(GF))
 argtype(gf::AbstractGriddedFunction) = argtype(typeof(gf))
 
 Base.size(agf::AbstractGriddedFunction) = size(grid(agf))
+function Base.showarg(io::IO, ::GF, toplevel::Bool) where {TY, GF <: AbstractGriddedFunction{TY}}
+    print(io, "$(nameof(GF)){$TY}")
+    toplevel && print(io, " with argument type $(argtype(GF))")
+end
+
 
 function Base.getindex(gf::AbstractGriddedFunction{TY, D}, I::Vararg{Int, D}) where {TY, D}
     fvalues(gf)[I...]

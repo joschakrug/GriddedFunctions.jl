@@ -162,11 +162,6 @@ function SubGrid(src::GS, inds::Vararg{Any, DS}) where {T, DS, GS <: AbstractGri
     SubGrid(src, axs)
 end
 
-function Base.show(io::IO, ::Type{SubGrid{T, D, DS, GS, DC}}) where {T, D, DS, GS, DC}
-    compact = get(io, :compact, true)
-    print(io, "SubGrid{$T, $D", compact ? "}" : ", $DS, $GS, $DC}")
-end
-
 "Return the source grid underlying sub-grid `g`."
 source(g::SubGrid) = g.source
 
@@ -346,11 +341,6 @@ struct SubGriddedFunction{TY, D, GF, VV, GV} <: AbstractGriddedFunction{TY, D}
         vals = view(fvalues(src), ntuple(ds -> indices(subaxes(sg, ds)), Val(DS))...)
         new{eltype(GF), ndims(SG), GF, typeof(vals), SG}(src, vals, sg)
     end
-end
-
-function Base.show(io::IO, ::Type{SubGriddedFunction{TY, D, GF, VV, GV}}) where {TY, D, GF, VV, GV}
-    compact = get(io, :compact, true)
-    print(io, "SubGriddedFunction{$TY, $D", compact ? "}" : ", $GF, $VV, $GV}")
 end
 
 grid(sgf::SubGriddedFunction) = sgf.subgrid

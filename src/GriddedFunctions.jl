@@ -6,7 +6,6 @@ include("axes.jl")
 include("grids.jl")
 include("functions.jl")
 include("views.jl")
-include("show.jl")
 
 export approximately
 export Axis, LinearAxis, DiscreteAxis, onaxisapprox
