@@ -76,6 +76,22 @@ import GriddedFunctions: find
         @test_throws Exception DiscreteAxis([2, 1])
     end
 
+    @testset "SelectionRange / inrange" begin
+        lax = LinearAxis(range(0.0, 10.0, length = 11))   # 0, 1, …, 10
+
+        # construction and show
+        r = inrange(2.0, 6.0)
+        @test GriddedFunctions.rangemin(r) == 2.0
+        @test GriddedFunctions.rangemax(r) == 6.0
+        @test repr(r) == "2.0 .. 6.0"
+
+        # subset via inrange
+        sa = subset(lax, inrange(2.0, 6.0))
+        @test length(sa) == 5
+        @test sa[1]   == 2.0
+        @test sa[end] == 6.0
+    end
+
     @testset "SubAxis" begin
         lax = LinearAxis(range(0.0, 10.0, length = 11))   # 0, 1, …, 10
         dax = DiscreteAxis([10, 20, 30])
@@ -304,14 +320,18 @@ import GriddedFunctions: find
         @test sg[1, 1]     == (x = 0.0,  y = 0.0, z = 10)
         @test sg[end, end] == (x = 10.0, y = 4.0, z = 10)
 
-        # restrict :x by index range, leave :y and :z free
-        sg2 = subset(g, (2., 6.), :, :)
+        # restrict :x by value range, leave :y and :z free
+        sg2 = subset(g, inrange(2., 6.), :, :)
         @test ndims(sg2) == 3
         @test size(sg2)  == (5, 5, 3)
         @test sg2[1, 1, 1] == (x = 2.0, y = 0.0, z = 10)
 
+        # inrange also works with named kwargs
+        sg2n = subset(g, x = inrange(2., 6.))
+        @test size(sg2n) == size(sg2)
+
         # kwargs in arbitrary order — same result
-        sg3 = subset(g, z = 20, x = (0., 5.))
+        sg3 = subset(g, z = 20, x = inrange(0., 5.))
         @test ndims(sg3) == 2
         @test sg3[1, 1] == (x = 0.0, y = 0.0, z = 20)
 
@@ -578,13 +598,13 @@ import GriddedFunctions: find
         @test fvalues(sgf)[end, end] ≈ 10.0 + 4.0 + 10
 
         # restrict :x by value range — values remain 3-D
-        sgf2 = subset(gf, x = (2., 6.))
+        sgf2 = subset(gf, x = inrange(2., 6.))
         @test ndims(fvalues(sgf2)) == 3
         @test size(fvalues(sgf2))  == (5, 5, 2)
         @test fvalues(sgf2)[1, 1, 1] ≈ 2.0 + 0.0 + 10
 
         # kwargs in arbitrary order
-        sgf3 = subset(gf; z = 20, x = (0., 5.))
+        sgf3 = subset(gf; z = 20, x = inrange(0., 5.))
         @test ndims(fvalues(sgf3)) == 2
         @test fvalues(sgf3)[1, 1] ≈ 0.0 + 0.0 + 20
 

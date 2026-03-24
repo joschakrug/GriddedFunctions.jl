@@ -36,6 +36,44 @@ find(approximately(5.01), ax)   # returns index 6
 approximately(x::T) where T = Approximator{T}(x)
 
 """
+    SelectionRange{T}
+
+A wrapper around a `(min, max)` pair of type `T` for selecting a contiguous
+range of axis values when subsetting.
+
+Do not construct directly, instead, use [`inrange`](@ref).
+"""
+struct SelectionRange{T}
+    min::T
+    max::T
+end
+
+"Return the minimum value of a [`SelectionRange`](@ref)."
+rangemin(r::SelectionRange) = r.min
+
+"Return the maximum value of a [`SelectionRange`](@ref)."
+rangemax(r::SelectionRange) = r.max
+
+Base.show(io::IO, r::SelectionRange) = print(io, "$(rangemin(r)) .. $(rangemax(r))")
+
+"""
+    inrange(min::T, max::T) where T
+
+Create a selection range from `min` to `max` (inclusive).
+
+Typically used when subsetting axis values to select all axis points between
+`min` and `max`.
+
+# Examples
+
+```julia
+ax = LinearAxis(range(0., 10., 11))
+subset(ax, inrange(2., 6.))   # SubAxis covering values 2 through 6
+```
+"""
+inrange(min::T, max::T) where T = SelectionRange{T}(min, max)
+
+"""
     Continuous
 
 Defines the `Continuous` trait of [`Axis`](@ref).

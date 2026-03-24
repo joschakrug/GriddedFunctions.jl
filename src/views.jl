@@ -7,11 +7,11 @@ Type alias for the set of valid axis selectors:
   collapsing it from the view.
 - `Approximator{T}` - an approximation wrapper around a scalar value of axis
   element type `T`; fixes the axis to that value, collapsing it from the view
-- `Tuple{T, T}` — a `(from, to)` pair of axis values; restricts the axis to the
-  corresponding index range (free dimension).
+- `SelectionRange{T}` — created via [`inrange`](@ref); restricts the axis to the
+  index range spanning the given `(min, max)` values (free dimension).
 - `Colon` (`:`) — keep the full axis unchanged (free dimension).
 """
-const Selector{T} = Union{T, Tuple{T, T}, Colon, Approximator{T}}
+const Selector{T} = Union{T, SelectionRange{T}, Colon, Approximator{T}}
 
 """
     SubAxis{T, I, A} <: Axis{T}
@@ -129,13 +129,6 @@ sg[3, 2]                       # returns (0.2, 0.4, 20)
 sg2 = SubGrid(g, 1:6, :, :)   # restrict first axis to indices 1:6
 
 sg3 = SubGrid(g, 3:3, :, :)   # size-1 first axis — NOT collapsed (still 3-D)
-
-# with named axes — use subset:
-g_named = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
-               y = LinearAxis(range(0.0, 2.0; length=6)),
-               z = DiscreteAxis([10, 20, 30]))
-sg4 = subset(g_named; z = 20)     # fix :z, keep :x and :y free
-sg5 = subset(g_named; x = (0.3, 0.75))    # restrict :x by value range
 ```
 """
 struct SubGrid{T, D, DS, GS <: AbstractGrid{T, DS}, SA <: NTuple{DS, SubAxis}} <: AbstractGrid{T, D}
@@ -364,21 +357,21 @@ end
 Return a [`SubAxis`](@ref) of `ax` for the given [`Selector`](@ref):
 
 - `:` — full axis (free)
-- `(from, to)::Tuple{T, T}` — restrict to the index range spanning values
-  `from` through `to` (free)
+- `inrange(from, to)::SelectionRange{T}` — restrict to the index range spanning
+  values `from` through `to` (free)
 - `x::T` — fix the axis to the single source index of value `x` (collapsed)
 """
 subset(ax::Axis, ::Colon) = SubAxis(ax, :)
 subset(ax::Axis{T}, x::Union{T, Approximator{T}}) where T = SubAxis(ax, find(x, ax))
-function subset(ax::Axis{T}, fromto::Tuple{T, T}) where T
-    from, to = fromto
+function subset(ax::Axis{T}, r::SelectionRange{T}) where T
+    from, to = rangemin(r), rangemax(r)
     ifrom, ito = 0, length(ax)
     for (i, x) in enumerate(ax)
         (x <= from) && (ifrom = i)
         (x <= to) && (ito = i)
         (x >= to) && return SubAxis(ax, ifrom:ito)
     end
-    error("$fromto is not entirely on axis $ax")
+    error("$r is not entirely on axis $ax")
 end
 
 """
@@ -390,7 +383,7 @@ Create a [`SubGrid`](@ref) of `g` from the given [`Selector`](@ref)s.
 Pass one selector per axis of `g`:
 
 - `:` — keep the full axis unchanged (free)
-- `(from, to)` — restrict to the index range spanning values `from` through `to` (free)
+- `inrange(from, to)` — restrict to the index range spanning values `from` through `to` (free)
 - scalar — fix the axis to that value, collapsing it from the view
 
 The keyword form accepts a named subset of axes (requires [`dimnames`](@ref) on the
@@ -403,11 +396,11 @@ g = Grid(x = LinearAxis(range(0.0, 1.0; length=11)),
          y = LinearAxis(range(0.0, 2.0; length=6)),
          z = DiscreteAxis([10, 20, 30]))
 
-subset(g, :, :, 20)          # fix :z → 2-D SubGrid
-subset(g, (0.2, 0.8), :, :)  # restrict :x by value range
-subset(g, x = approximately(0.51)) # restrict :x to value closest to 0.51
-subset(g; z = 20)             # fix :z by name
-subset(g; z = 20, x = (0.2, 0.8))  # mixed, any order
+subset(g, :, :, 20)                    # fix :z → 2-D SubGrid
+subset(g, inrange(0.2, 0.8), :, :)     # restrict :x by value range
+subset(g, x = approximately(0.51))     # restrict :x to value closest to 0.51
+subset(g; z = 20)                      # fix :z by name
+subset(g; z = 20, x = inrange(0.2, 0.8))  # mixed, any order
 ```
 """
 function subset(g::AbstractGrid{T, DS}, selectors::Vararg{Selector, DS}) where {T, DS}
