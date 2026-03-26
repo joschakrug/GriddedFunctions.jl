@@ -1,6 +1,6 @@
 name = "GriddedFunctions"
 uuid = "15489a28-470a-4c47-be98-4174d0f03947"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Joscha Krug <joscha.krug@proton.me>"]
 
 [deps]
