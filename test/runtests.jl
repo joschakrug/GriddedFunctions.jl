@@ -639,6 +639,7 @@ import GriddedFunctions: find
         @test_throws Exception gfi(2.031, 11.007, 2)
 
         # out-of-bounds on continuous axes: flat extrapolation (clamped to boundary)
+        gfi = interpolate(gf, extrapolate = true)
         @test gfi(-1.0,  5.0, 0) ≈ gfi(0.0,  5.0, 0)   # x below lower bound
         @test gfi(15.0,  5.0, 0) ≈ gfi(10.0, 5.0, 0)   # x above upper bound
         @test gfi( 5.0,  0.0, 0) ≈ gfi(5.0,  5.0, 0)   # y below lower bound
@@ -665,6 +666,9 @@ import GriddedFunctions: find
         @test gfi(10.0, 10.0) ≈ 100.0
 
         # out-of-bounds on continuous axes: flat extrapolation
+
+        gfi = interpolate(gf, extrapolate = true)
+
         @test gfi(-1.0,  5.0) ≈ gfi(0.0,  5.0)    # x below lower bound → clamped to x=0
         @test gfi(15.0,  5.0) ≈ gfi(10.0, 5.0)    # x above upper bound → clamped to x=10
         @test gfi( 5.0, -1.0) ≈ gfi(5.0,  0.0)    # y below lower bound → clamped to y=0

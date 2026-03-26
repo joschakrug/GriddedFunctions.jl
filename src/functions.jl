@@ -286,7 +286,7 @@ struct GFInterpolation{GF <: AbstractGriddedFunction, DD, SITP}
     gf::GF
     interpolations::Array{SITP, DD}
 
-    function GFInterpolation(gf::GF, interpmode::ITP) where {
+    function GFInterpolation(gf::GF, interpmode::ITP; extrapolate = false) where {
             GF <: AbstractGriddedFunction,
             ITP <: Interpolations.InterpolationType
         }
@@ -295,11 +295,18 @@ struct GFInterpolation{GF <: AbstractGriddedFunction, DD, SITP}
             subgf = continuousview(gf, I)
             itp = Interpolations.interpolate(fvalues(subgf), interpmode)
             sitp = Interpolations.scale(itp, map(range, gridaxes(grid(subgf))))
-            Interpolations.extrapolate(sitp, Interpolations.Flat())
+            extrapolate ? Interpolations.extrapolate(sitp, Interpolations.Flat()) :
+                sitp
         end
 
         new{GF, ndiscretedims(GF), eltype(itps)}(gf, itps)
     end
+end
+
+Base.show(io::IO, ::Type{GFITP}) where {GF, GFITP <: GFInterpolation{GF}} =
+    print(io, "GFInterpolation{$(GF)}")
+function Base.show(io::IO, ::MIME"text/plain", ::Type{GFITP}) where {GFITP <: GFInterpolation}
+    get(io, :compact, false) ? show(io, GFITP) : invoke(show, Tuple{IO, Type}, io, GFITP)
 end
 
 """
@@ -319,9 +326,10 @@ between all points on the continuous part of the grid of `gf`.
 """
 function interpolate(
         gf::AbstractGriddedFunction,
-        interpmode = Interpolations.BSpline(Interpolations.Linear())
+        interpmode = Interpolations.BSpline(Interpolations.Linear());
+        extrapolate = false
     )
-    GFInterpolation(gf, interpmode)
+    GFInterpolation(gf, interpmode, extrapolate = extrapolate)
 end
 
 """
