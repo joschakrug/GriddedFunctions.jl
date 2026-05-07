@@ -272,7 +272,9 @@ function totuple(x::T, ::SG) where {T, D, DS, SG <: SubGrid{T, D, DS}}
 end
 
 function ncontinuousdims(::Type{SubGrid{T, D, DS, GS, SA}}) where {T, D, DS, GS, SA}
-    ncontinuousdims(GS) - sum(isfixed(SubGrid{T, D, DS, GS, SA}, ds) for ds in 1:ncontinuousdims(GS))
+    ncontinuousdims(GS) > 0 ?
+        ncontinuousdims(GS) - sum(isfixed(SubGrid{T, D, DS, GS, SA}, ds) for ds in 1:ncontinuousdims(GS)) :
+        0
 end
 
 # --- SubGriddedFunction -------------------------------------------
