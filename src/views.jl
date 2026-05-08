@@ -249,6 +249,10 @@ function subindex(
     )
 end
 
+dimnames(::Type{SG}) where {T, D, SG <: SubGrid{T, D}} =
+    ntuple(d -> dimnames(T, sourcedim(SG, d)), Val(D))
+dimnum(::Type{SG}, name::Symbol) where {T, SG <: SubGrid{T}} = subdim(SG, dimnum(T, name))
+
 # implement AbstractGrid interface
 
 function gridaxes(g::SG) where {T, D, SG <: SubGrid{T, D}}
@@ -410,8 +414,8 @@ function subset(g::AbstractGrid{T, DS}, selectors::Vararg{Selector, DS}) where {
     SubGrid(g, subaxes)
 end
 
-function subset(g::AbstractGrid{T, DS}; kwargs...) where {T, DS}
-    names = dimnames(T)
+function subset(g::G; kwargs...) where {T, DS, G <: AbstractGrid{T, DS}}
+    names = dimnames(G)
 
     if (names === ()) || !all(k in names for k in keys(kwargs))
         error("Trying to subset on dimension names that are not part of type $T")

@@ -42,6 +42,27 @@ Base.show(io::IO, ::Type{G}) where {T, D, G <: AbstractGrid{T, D}} =
 Base.show(io::IO, ::MIME"text/plain", ::Type{G}) where {G <: AbstractGrid} =
     get(io, :compact, false) ? show(io, G) : invoke(show, Tuple{IO, Type}, io, G)
 
+
+"""
+    dimnames(::Type{AbstractGrid}, d = nothing)
+
+Return the names of the different dimensions of the given grid type.
+If `d` is specified, return the name of dimension `d` only.
+
+Defaults to an empty tuple if the grid does not have dimension names specified.
+See [`dimnames`](@ref) for details on how dimension names are inferred.
+"""
+dimnames(::Type{G}) where {T, G <: AbstractGrid{T}} = dimnames(T)
+dimnames(::Type{G}, d) where G <: AbstractGrid = dimnames(G)[d]
+
+"""
+    dimnum(::Type{AbstractGrid}, name::Symbol)
+
+Return the number of dimension `name` (as specified by [`dimnames`](@ref))
+in the given grid type.
+"""
+dimnum(::Type{G}, name::Symbol) where {T, G <: AbstractGrid{T}} = dimnum(T, name)
+
 """
     gridaxes(g::AbstractGrid, d = nothing)
 
@@ -57,7 +78,7 @@ the concrete type of `g` is defined.
 """
 function gridaxes end
 gridaxes(g::AbstractGrid, d::Int) = gridaxes(g)[d]
-gridaxes(g::AbstractGrid{T}, d::Symbol) where T = gridaxes(g, dimnum(T, d))
+gridaxes(g::G, d::Symbol) where {G <: AbstractGrid} = gridaxes(g, dimnum(G, d))
 
 """
     topoint(t::NTuple{D}, g::AbstractGrid{T, D}) -> x::T
