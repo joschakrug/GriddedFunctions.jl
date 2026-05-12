@@ -3,15 +3,14 @@ module GriddedFunctionPlotsExt
 using GriddedFunctions
 using RecipesBase
 
-import GriddedFunctions: AbstractGriddedFunction, grid, gridaxes, ncontinuousdims, dimnames
+import GriddedFunctions: AbstractGriddedFunction, grid, gridaxes, ncontinuousdims, dimnames, gridtype
 
 # `values` clashes with Base.values; qualify explicitly throughout.
 
 # Return the axis label for dimension `d` of point type `T`.
 # Uses type `T`'s dimension names when available; falls back to "xd" for plain Tuples.
 function _axis_label(gf::AbstractGriddedFunction, d::Int)
-    T = eltype(grid(gf))
-    names = dimnames(T)
+    names = dimnames(gridtype(gf))
     if (d <= length(names)) && (names[d] isa Symbol)
         string(names[d])
     else

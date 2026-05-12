@@ -42,7 +42,7 @@ function fvalues end
 Return the type of the grid underlying the concrete gridded function type `GF`.
 """
 function gridtype end
-gridtype(gf::AbstractGriddedFunction) = gridtype(eltype(gf))
+gridtype(gf::AbstractGriddedFunction) = gridtype(typeof(gf))
 
 """
     argtype(GF::Type{AbstractGriddedFunction})
@@ -77,7 +77,7 @@ ndiscretedims(gf::AbstractGriddedFunction) = ndiscretedims(typeof(gf))
     points(gf::AbstractGriddedFunction{TY})
 
 A generator iterating over all points of `gf`, returning each point as a
-`Pair` of a grid point and its corresponding functoin value.
+`Pair` of a grid point and its corresponding function value.
 """
 points(gf::AbstractGriddedFunction) = (x => y for (x, y) in zip(grid(gf), fvalues(gf)))
 
