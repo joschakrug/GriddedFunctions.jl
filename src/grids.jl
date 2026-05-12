@@ -145,7 +145,7 @@ function find(x::T, g::AbstractGrid{T, D}) where {T, D}
 end
 
 function find(x::Approximator{T}, g::AbstractGrid{T, D}) where {T, D}
-    t = totuple(value(x), g)
+    t = totuple(exactly(x), g)
     CartesianIndex(
         ntuple(
             d -> find(approximately(t[d]), gridaxes(g, d)), Val(D)
@@ -159,7 +159,7 @@ function find(x::T, g::AbstractGrid{T, 1}) where T
 end
 
 function find(x::Approximator{T}, g::AbstractGrid{T, 1}) where T
-    t = totuple(value(x), g)
+    t = totuple(exactly(x), g)
     find(approximately(only(t)), only(gridaxes(g)))
 end
 

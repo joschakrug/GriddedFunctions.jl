@@ -11,12 +11,6 @@ struct Approximator{T}
     x::T
 end
 
-"Return the wrapped value of an [`Approximator`](@ref)."
-value(x::Approximator) = x.x
-Base.convert(::Type{T}, x::Approximator{T}) where T = value(x)
-
-Base.show(io::IO, app::Approximator) = print(io, "~ $(value(app))")
-
 """
     approximately(x::T) where T
 
@@ -34,6 +28,25 @@ find(approximately(5.01), ax)   # returns index 6
 ```
 """
 approximately(x::T) where T = Approximator{T}(x)
+
+"""
+    exactly(x::Approximator{T}) where T
+
+Return the exact value wrapped by [`Approximator`](@ref) `x`.
+
+This reverses [`approximately`](@ref).
+
+# Examples
+
+```julia
+exactly(approximately(5.01)) === 5.01   # true
+```
+"""
+exactly(x::Approximator) = x.x
+exactly(x::T) where T = x
+
+Base.convert(::Type{T}, x::Approximator{T}) where T = exactly(x)
+Base.show(io::IO, x::Approximator) = print(io, "~ $(exactly(x))")
 
 """
     SelectionRange{T}
@@ -158,10 +171,10 @@ Base.in(x::Union{T, Approximator{T}}, ax::A) where {T, A <: Axis{T}} =
 
 _inaxis(::Discrete, x::T, ax::Axis{T}) where T = in(x, points(ax))
 _inaxis(::Discrete, x::Approximator{T}, ax::Axis{T}) where T =
-    _inaxis(Discrete(), value(x), ax)
+    _inaxis(Discrete(), exactly(x), ax)
 _inaxis(::Continuous, x::T, ax::Axis{T}) where T = in(x, points(ax))
 _inaxis(::Continuous, x::Approximator{T}, ax::Axis{T}) where T =
-    minimum(ax) <= value(x) <= maximum(ax)
+    minimum(ax) <= exactly(x) <= maximum(ax)
 
 """
     find(x::T, ax::Axis{T}) where T
@@ -177,7 +190,7 @@ find(x::Union{T, Approximator{T}}, ax::A) where {T, A <: Axis{T}} =
     find(iscontinuous(A), x, ax)
 
 find(::Discrete, x::Union{T, Approximator{T}}, ax::Axis{T}) where T =
-    searchsortedonly(points(ax), x)
+    searchsortedonly(points(ax), exactly(x))
 
 function find(::Continuous, x::T, ax::Axis{T}) where T
     i = round(Int, bestguessindex(x, ax))
@@ -185,7 +198,7 @@ function find(::Continuous, x::T, ax::Axis{T}) where T
 end
 
 function find(::Continuous, x::Approximator{T}, ax::Axis{T}) where T
-    bestguess = bestguessindex(value(x), ax)
+    bestguess = bestguessindex(exactly(x), ax)
     1 <= bestguess <= length(ax) || error("$x is outside the bounds of $ax")
     round(Int, bestguess)
 end

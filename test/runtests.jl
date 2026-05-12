@@ -41,6 +41,7 @@ import GriddedFunctions: find
         # finding
         @test find(0.1, lax) == 2
         @test_throws Exception find(0.14, lax)
+        @test exactly(approximately(5.01)) === 5.01
         @test find(approximately(0.14), lax) == 2
         @test find(approximately(0.15), lax) == 2
         @test find(approximately(0.151), lax) == 3
@@ -70,7 +71,7 @@ import GriddedFunctions: find
         # finding
         @test find(1, dax) == 2
         @test_throws Exception find(0.5, dax)
-        @test_throws Exception find(approximately(1), dax)
+        @test_throws Exception find(approximately(0.5), dax)
 
         # constructor requires sorted points
         @test_throws Exception DiscreteAxis([2, 1])
@@ -135,7 +136,7 @@ import GriddedFunctions: find
         # find on a fixed SubAxis: value must match the fixed element
         @test find(20, sa_fix) == 1   # returns source index
         @test_throws Exception find(10, sa_fix)
-        @test_throws Exception find(approximately(20), sa_fix)   # inexact not supported for fixed
+        @test_throws Exception find(approximately(20.1), sa_fix)   # inexact not supported for fixed
 
         # --- out-of-bounds construction ---
         @test_throws Exception SubAxis(lax, 0:5)    # first index < 1
@@ -229,7 +230,7 @@ import GriddedFunctions: find
         @test find((0.3, 20), gd) == CartesianIndex(4, 2)
         @test_throws Exception find((0.35, 10), gd)                              # 0.35 not on continuous axis
         @test_throws Exception find((0.3, 25), gd)                               # 25 outside discrete axis range
-        @test_throws Exception find(approximately((0.34, 10)), gd)               # discrete does not support inexact
+        @test_throws Exception find(approximately((0.34, 10.1)), gd)               # discrete does not support inexact
 
         # custom type
         gc = Grid(DoubleType, linax1, disax)
