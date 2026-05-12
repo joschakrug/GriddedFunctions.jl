@@ -262,12 +262,12 @@ end
 gridaxes(g::SubGrid, d::Int) = subaxes(g, sourcedim(g, d))
 
 function topoint(t::NTuple{D, Any}, g::SG) where {T, D, DS, SG <: SubGrid{T, D, DS}}
-    convert(
-        T,
+    topoint(
         ntuple(
             ds -> isfixed(SG, ds) ? fixedto(g, ds) : t[subdim(SG, ds)],
             Val(DS)
-        )
+        ),
+        source(g)
     )
 end
 

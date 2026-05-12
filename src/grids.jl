@@ -343,6 +343,7 @@ function Base.show(io::IO, ::Type{Grid{T, D, A, DC}}) where {T, D, A, DC}
 end
 
 Grid(T::Type, axes::Vararg{Axis}) = Grid{T}(axes)
+Grid(axis::Axis{T}) where T = Grid(T, axis)
 function Grid(axes::Vararg{Axis})
     T = Tuple{map(eltype, axes)...}
     Grid{T}(axes)
@@ -364,6 +365,7 @@ function Grid(; kwargs...)
 end
 
 gridaxes(g::Grid) = g.axes
+topoint(t::Tuple{T}, ::Grid{T, 1}) where T = only(t)
 topoint(t::NTuple{D, Any}, ::Grid{T, D}) where {T, D} = convert(T, t)
 totuple(x::T, ::Grid{T, D}) where {T, D} = ntuple(d -> x[d], Val(D))
 ncontinuousdims(::Type{Grid{T, D, A, DC}}) where {T, D, A, DC} = DC
